@@ -21,9 +21,8 @@ import (
 	"os"
 	"time"
 
-	ct "github.com/google/certificate-transparency-go"
-	"github.com/google/certificate-transparency-go/trillian/ctfe/configpb"
 	"github.com/google/certificate-transparency-go/x509"
+	"github.com/transparency-dev/trillian-tessera/personalities/ct-static-api/configpb"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 	"k8s.io/klog/v2"
@@ -38,49 +37,12 @@ type ValidatedLogConfig struct {
 	KeyUsages     []x509.ExtKeyUsage
 	NotAfterStart *time.Time
 	NotAfterLimit *time.Time
-	FrozenSTH     *ct.SignedTreeHead
 }
 
-// LogConfigFromFile creates a slice of LogConfig options from the given
-// filename, which should contain text or binary-encoded protobuf configuration
-// data.
-func LogConfigFromFile(filename string) ([]*configpb.LogConfig, error) {
-	cfgBytes, err := os.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-
-	var cfg configpb.LogConfigSet
-	if txtErr := prototext.Unmarshal(cfgBytes, &cfg); txtErr != nil {
-		if binErr := proto.Unmarshal(cfgBytes, &cfg); binErr != nil {
-			return nil, fmt.Errorf("failed to parse LogConfigSet from %q as text protobuf (%v) or binary protobuf (%v)", filename, txtErr, binErr)
-		}
-	}
-
-	if len(cfg.Config) == 0 {
-		return nil, errors.New("empty log config found")
-	}
-	return cfg.Config, nil
-}
-
-// ToMultiLogConfig creates a multi backend config proto from the data
-// loaded from a single-backend configuration file. All the log configs
-// reference a default backend spec as provided.
-func ToMultiLogConfig(cfg []*configpb.LogConfig, beSpec string) *configpb.LogMultiConfig {
-	defaultBackend := &configpb.LogBackend{Name: "default", BackendSpec: beSpec}
-	for _, c := range cfg {
-		c.LogBackendName = defaultBackend.Name
-	}
-	return &configpb.LogMultiConfig{
-		LogConfigs: &configpb.LogConfigSet{Config: cfg},
-		Backends:   &configpb.LogBackendSet{Backend: []*configpb.LogBackend{defaultBackend}},
-	}
-}
-
-// MultiLogConfigFromFile creates a LogMultiConfig proto from the given
+// LogMultiConfigFromFile creates a LogMultiConfig proto from the given
 // filename, which should contain text or binary-encoded protobuf configuration data.
 // Does not do full validation of the config but checks that it is non empty.
-func MultiLogConfigFromFile(filename string) (*configpb.LogMultiConfig, error) {
+func LogMultiConfigFromFile(filename string) (*configpb.LogMultiConfig, error) {
 	cfgBytes, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
@@ -93,7 +55,7 @@ func MultiLogConfigFromFile(filename string) (*configpb.LogMultiConfig, error) {
 		}
 	}
 
-	if len(cfg.LogConfigs.GetConfig()) == 0 || len(cfg.Backends.GetBackend()) == 0 {
+	if len(cfg.GetConfig()) == 0 {
 		return nil, errors.New("config is missing backends and/or log configs")
 	}
 	return &cfg, nil
@@ -110,8 +72,8 @@ func MultiLogConfigFromFile(filename string) (*configpb.LogMultiConfig, error) {
 // Returns the validated structures (useful to avoid double validation).
 // TODO(phboneff): return an error if there is no backend config
 func ValidateLogConfig(cfg *configpb.LogConfig) (*ValidatedLogConfig, error) {
-	if cfg.LogId == 0 {
-		return nil, errors.New("empty log ID")
+	if cfg.SubmissionPrefix == "" {
+		return nil, errors.New("empty log SubmissionPrefix")
 	}
 
 	vCfg := ValidatedLogConfig{Config: cfg}
@@ -122,25 +84,17 @@ func ValidateLogConfig(cfg *configpb.LogConfig) (*ValidatedLogConfig, error) {
 		if vCfg.PubKey, err = x509.ParsePKIXPublicKey(pubKey.Der); err != nil {
 			return nil, fmt.Errorf("x509.ParsePKIXPublicKey: %w", err)
 		}
-	} else if cfg.IsMirror {
-		return nil, errors.New("empty public key for mirror")
-	} else if cfg.FrozenSth != nil {
-		return nil, errors.New("empty public key for frozen STH")
 	}
 
 	// Validate the private key.
-	if !cfg.IsMirror {
-		if cfg.PrivateKey == nil {
-			return nil, errors.New("empty private key")
-		}
-		privKey, err := cfg.PrivateKey.UnmarshalNew()
-		if err != nil {
-			return nil, fmt.Errorf("invalid private key: %v", err)
-		}
-		vCfg.PrivKey = privKey
-	} else if cfg.PrivateKey != nil {
-		return nil, errors.New("unnecessary private key for mirror")
+	if cfg.PrivateKey == nil {
+		return nil, errors.New("empty private key")
 	}
+	privKey, err := cfg.PrivateKey.UnmarshalNew()
+	if err != nil {
+		return nil, fmt.Errorf("invalid private key: %v", err)
+	}
+	vCfg.PrivKey = privKey
 
 	// Validate the Backend config:
 	if cfg.StorageConfig == nil {
@@ -158,7 +112,7 @@ func ValidateLogConfig(cfg *configpb.LogConfig) (*ValidatedLogConfig, error) {
 				// If "Any" is specified, then we can ignore the entire list and
 				// just disable EKU checking.
 				if ku == x509.ExtKeyUsageAny {
-					klog.Infof("%s: Found ExtKeyUsageAny, allowing all EKUs", cfg.Prefix)
+					klog.Infof("%s: Found ExtKeyUsageAny, allowing all EKUs", cfg.SubmissionPrefix)
 					vCfg.KeyUsages = nil
 					break
 				}
@@ -198,53 +152,7 @@ func ValidateLogConfig(cfg *configpb.LogConfig) (*ValidatedLogConfig, error) {
 		return nil, errors.New("expected merge delay exceeds MMD")
 	}
 
-	if sth := cfg.FrozenSth; sth != nil {
-		verifier, err := ct.NewSignatureVerifier(vCfg.PubKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create signature verifier: %v", err)
-		}
-		if vCfg.FrozenSTH, err = (&ct.GetSTHResponse{
-			TreeSize:          uint64(sth.TreeSize),
-			Timestamp:         uint64(sth.Timestamp),
-			SHA256RootHash:    sth.Sha256RootHash,
-			TreeHeadSignature: sth.TreeHeadSignature,
-		}).ToSignedTreeHead(); err != nil {
-			return nil, fmt.Errorf("invalid frozen STH: %v", err)
-		}
-		if err := verifier.VerifySTHSignature(*vCfg.FrozenSTH); err != nil {
-			return nil, fmt.Errorf("signature verification failed: %v", err)
-		}
-	}
-
 	return &vCfg, nil
-}
-
-// LogBackendMap is a map from log backend names to LogBackend objects.
-type LogBackendMap = map[string]*configpb.LogBackend
-
-// BuildLogBackendMap returns a map from log backend names to the corresponding
-// LogBackend objects. It returns an error unless all backends have unique
-// non-empty names and specifications.
-func BuildLogBackendMap(lbs *configpb.LogBackendSet) (LogBackendMap, error) {
-	lbm := make(LogBackendMap)
-	specs := make(map[string]bool)
-	for _, be := range lbs.Backend {
-		if len(be.Name) == 0 {
-			return nil, fmt.Errorf("empty backend name: %v", be)
-		}
-		if len(be.BackendSpec) == 0 {
-			return nil, fmt.Errorf("empty backend spec: %v", be)
-		}
-		if _, ok := lbm[be.Name]; ok {
-			return nil, fmt.Errorf("duplicate backend name: %v", be)
-		}
-		if ok := specs[be.BackendSpec]; ok {
-			return nil, fmt.Errorf("duplicate backend spec: %v", be)
-		}
-		lbm[be.Name] = be
-		specs[be.BackendSpec] = true
-	}
-	return lbm, nil
 }
 
 func validateConfigs(cfg []*configpb.LogConfig) error {
@@ -255,7 +163,7 @@ func validateConfigs(cfg []*configpb.LogConfig) error {
 		if _, err := ValidateLogConfig(logCfg); err != nil {
 			return fmt.Errorf("log config: %v: %v", err, logCfg)
 		}
-		if len(logCfg.Prefix) == 0 {
+		if len(logCfg.SubmissionPrefix) == 0 {
 			return fmt.Errorf("log config: empty prefix: %v", logCfg)
 		}
 		if logOriginMap[logCfg.SubmissionPrefix] {

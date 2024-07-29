@@ -38,7 +38,9 @@ package ctonly
 import (
 	"crypto/sha256"
 	"errors"
+	"fmt"
 
+	"github.com/google/certificate-transparency-go/x509"
 	"github.com/transparency-dev/merkle/rfc6962"
 	"golang.org/x/crypto/cryptobyte"
 )
@@ -81,6 +83,28 @@ func (c Entry) LeafData(idx uint64) []byte {
 			b.AddBytes(c.PrecertSigningCert)
 		})
 	}
+	return b.BytesOrPanic()
+}
+
+// MerkleTreeLeaf returns a RFC 6962 MerkleTreeLeaf.
+func (e *Entry) MerkleTreeLeaf(idx uint64) []byte {
+	b := &cryptobyte.Builder{}
+	b.AddUint8(0 /* version = v1 */)
+	b.AddUint8(0 /* leaf_type = timestamped_entry */)
+	b.AddUint64(uint64(e.Timestamp))
+	if !e.IsPrecert {
+		b.AddUint16(0 /* entry_type = x509_entry */)
+		b.AddUint24LengthPrefixed(func(b *cryptobyte.Builder) {
+			b.AddBytes(e.Certificate)
+		})
+	} else {
+		b.AddUint16(1 /* entry_type = precert_entry */)
+		b.AddBytes(e.IssuerKeyHash[:])
+		b.AddUint24LengthPrefixed(func(b *cryptobyte.Builder) {
+			b.AddBytes(e.Certificate)
+		})
+	}
+	addExtensions(b, idx)
 	return b.BytesOrPanic()
 }
 
@@ -166,4 +190,64 @@ func (c extensions) Marshal() ([]byte, error) {
 // addUint40 appends a big-endian, 40-bit value to the byte string.
 func addUint40(b *cryptobyte.Builder, v uint64) {
 	b.AddBytes([]byte{byte(v >> 32), byte(v >> 24), byte(v >> 16), byte(v >> 8), byte(v)})
+}
+
+// MerkleTreeLeafFromChain generates a MerkleTreeLeaf from a chain and timestamp.
+// copied from ctg/serialization.go
+func EntryFromChain(chain []*x509.Certificate, isPrecert bool, timestamp uint64) (*Entry, error) {
+	leaf := Entry{
+		IsPrecert: isPrecert,
+		Timestamp: timestamp,
+	}
+	if !isPrecert {
+		leaf.Certificate = chain[0].Raw
+		return &leaf, nil
+	}
+
+	// Pre-certs are more complicated. First, parse the leaf pre-cert and its
+	// putative issuer.
+	if len(chain) < 2 {
+		return nil, fmt.Errorf("no issuer cert available for precert leaf building")
+	}
+	issuer := chain[1]
+	cert := chain[0]
+
+	var preIssuer *x509.Certificate
+	if IsPreIssuer(issuer) {
+		// Replace the cert's issuance information with details from the pre-issuer.
+		preIssuer = issuer
+
+		// The issuer of the pre-cert is not going to be the issuer of the final
+		// cert.  Change to use the final issuer's key hash.
+		if len(chain) < 3 {
+			return nil, fmt.Errorf("no issuer cert available for pre-issuer")
+		}
+		issuer = chain[2]
+	}
+
+	// Next, post-process the DER-encoded TBSCertificate, to remove the CT poison
+	// extension and possibly update the issuer field.
+	defangedTBS, err := x509.BuildPrecertTBS(cert.RawTBSCertificate, preIssuer)
+	if err != nil {
+		return nil, fmt.Errorf("failed to remove poison extension: %v", err)
+	}
+
+	leaf.Precertificate = cert.Raw
+	leaf.PrecertSigningCert = issuer.Raw
+	leaf.Certificate = defangedTBS
+
+	issuerKeyHash := sha256.Sum256(issuer.RawSubjectPublicKeyInfo)
+	leaf.IssuerKeyHash = issuerKeyHash[:]
+	return &leaf, nil
+}
+
+// IsPreIssuer indicates whether a certificate is a pre-cert issuer with the specific
+// certificate transparency extended key usage.
+func IsPreIssuer(issuer *x509.Certificate) bool {
+	for _, eku := range issuer.ExtKeyUsage {
+		if eku == x509.ExtKeyUsageCertificateTransparency {
+			return true
+		}
+	}
+	return false
 }

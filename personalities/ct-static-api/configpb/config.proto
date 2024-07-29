@@ -23,61 +23,56 @@ import "crypto/keyspb/keyspb.proto";
 import "google/protobuf/any.proto";
 import "google/protobuf/timestamp.proto";
 
-// LogConfigSet is a set of LogConfig messages.
-message LogConfigSet {
+// LogMultiConfig is a set of LogConfig messages.
+message LogMultiConfig {
   repeated LogConfig config = 1;
 }
 
 // LogConfig describes the configuration options for a log instance.
 //
-// NEXT_ID: 20
+// NEXT_ID: 15 
 message LogConfig {
-  // The ID of a Trillian tree that stores the log data. The tree type must be
-  // LOG for regular CT logs. For mirror logs it must be either PREORDERED_LOG
-  // or LOG, and can change at runtime. CTFE in mirror mode uses only read API
-  // which is common for both types.
-  int64 log_id = 1;
   // full domain + path at which the log is served. Will also be used 
   // as the origin of the log, as per https://c2sp.org/static-ct-api.
-  string submission_prefix = 2;
+  string submission_prefix = 1;
   // Paths to the files containing root certificates that are acceptable to the
   // log. The certs are served through get-roots endpoint.
-  repeated string roots_pem_file = 3;
+  repeated string roots_pem_file = 2;
   // The private key used for signing STHs etc.
-  google.protobuf.Any private_key = 4;
+  google.protobuf.Any private_key = 3;
   // The public key matching the above private key (if both are present). It is
   // Here as a convenience for test tools.
-  keyspb.PublicKey public_key = 5;
+  keyspb.PublicKey public_key = 4;
   // If reject_expired is true then the certificate validity period will be
   // checked against the current time during the validation of submissions.
   // This will cause expired certificates to be rejected.
-  bool reject_expired = 6;
+  bool reject_expired = 5;
   // If reject_unexpired is true then rejects certificates that are either
   // currently valid or not yet valid.
-  bool reject_unexpired = 7;
+  bool reject_unexpired = 6;
   // If set, ext_key_usages will restrict the set of such usages that the
   // server will accept. By default all are accepted. The values specified
   // must be ones known to the x509 package.
-  repeated string ext_key_usages = 8;
+  repeated string ext_key_usages = 7;
   // not_after_start defines the start of the range of acceptable NotAfter
   // values, inclusive.
   // Leaving this unset implies no lower bound to the range.
-  google.protobuf.Timestamp not_after_start = 9;
+  google.protobuf.Timestamp not_after_start = 8;
   // not_after_limit defines the end of the range of acceptable NotAfter values,
   // exclusive.
   // Leaving this unset implies no upper bound to the range.
-  google.protobuf.Timestamp not_after_limit = 10;
+  google.protobuf.Timestamp not_after_limit = 9;
   // accept_only_ca controls whether or not *only* certificates with the CA bit
   // set will be accepted.
-  bool accept_only_ca = 11;
+  bool accept_only_ca = 10;
   // backend_name if set indicates which backend serves this log. The name must be
   // storage_config configures tessera backend implementation
-  StorageConfig storage_config = 12;
+  StorageConfig storage_config = 11;
 
   // The Maximum Merge Delay (MMD) of this log in seconds. See RFC6962 section 3
   // for definition of MMD. If zero, the log does not provide an MMD guarantee
   // (for example, it is a frozen log).
-  int32 max_merge_delay_sec = 13;
+  int32 max_merge_delay_sec = 12;
   // The merge delay that the underlying log implementation is able/targeting to
   // provide. This option is exposed in CTFE metrics, and can be particularly
   // useful to catch when the log is behind but has not yet violated the strict
@@ -85,19 +80,11 @@ message LogConfig {
   // Log operator should decide what exactly EMD means for them. For example, it
   // can be a 99-th percentile of merge delays that they observe, and they can
   // alert on the actual merge delay going above a certain multiple of this EMD.
-  int32 expected_merge_delay_sec = 14;
+  int32 expected_merge_delay_sec = 13;
 
   // A list of X.509 extension OIDs, in dotted string form (e.g. "2.3.4.5")
   // which should cause submissions to be rejected.
-  repeated string reject_extensions = 15;
-}
-
-// LogMultiConfig wraps up a LogBackendSet and corresponding LogConfigSet so
-// that they can easily be parsed as a single proto.
-message LogMultiConfig {
-  // The set of logs that will use the above backends. All the protos in this
-  // LogConfigSet must set a valid log_backend_name for the config to be usable.
-  LogConfigSet log_configs = 2;
+  repeated string reject_extensions = 14;
 }
 
 message GCPConfig {

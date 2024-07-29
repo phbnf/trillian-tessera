@@ -28,23 +28,27 @@ import (
 	"time"
 
 	"github.com/google/certificate-transparency-go/asn1"
-	"github.com/google/certificate-transparency-go/schedule"
 	"github.com/google/certificate-transparency-go/trillian/util"
 	"github.com/google/certificate-transparency-go/x509"
 	"github.com/google/certificate-transparency-go/x509util"
-	"github.com/google/trillian"
 	"github.com/google/trillian/crypto/keys"
 	"github.com/google/trillian/monitoring"
-	"k8s.io/klog/v2"
+	"github.com/transparency-dev/trillian-tessera/ctonly"
 )
 
+type CTStorage interface {
+	// Add should duably assign an index to the provided Entry, and return it.
+	Add(context.Context, *ctonly.Entry) (uint64, error)
+}
+
+// TODO(phboneff): prob needs to be adapted / removed
 // InstanceOptions describes the options for a log instance.
 type InstanceOptions struct {
 	// Validated holds the original configuration options for the log, and some
 	// of its fields parsed as a result of validating it.
 	Validated *ValidatedLogConfig
-	// Client is a corresponding Trillian log client.
-	Client trillian.TrillianLogClient
+	// A tessera backend storage implementation
+	Store func(context.Context, *ctonly.Entry) (uint64, error)
 	// Deadline is a timeout for Trillian RPC requests.
 	Deadline time.Duration
 	// MetricFactory allows creating metrics.
@@ -65,10 +69,6 @@ type InstanceOptions struct {
 	// limited. If unset, no quota will be requested for intermediate
 	// certificates.
 	CertificateQuotaUser func(*x509.Certificate) string
-	// STHStorage provides STHs of a source log for the mirror. Only mirror
-	// instances will use it, i.e. when IsMirror == true in the config. If it is
-	// empty then the DefaultMirrorSTHStorage will be used.
-	STHStorage MirrorSTHStorage
 	// MaskInternalErrors indicates if internal server errors should be masked
 	// or returned to the user containing the full error message.
 	MaskInternalErrors bool
@@ -77,23 +77,23 @@ type InstanceOptions struct {
 // Instance is a set up log/mirror instance. It must be created with the
 // SetUpInstance call.
 type Instance struct {
-	Handlers  PathHandlers
-	STHGetter STHGetter
-	li        *logInfo
+	Handlers PathHandlers
+	li       *logInfo
 }
 
+// TODO(phboneff): probably remove this
 // RunUpdateSTH regularly updates the Instance STH so our metrics stay
 // up-to-date with any tree head changes that are not triggered by us.
-func (i *Instance) RunUpdateSTH(ctx context.Context, period time.Duration) {
-	c := i.li.instanceOpts.Validated.Config
-	klog.Infof("Start internal get-sth operations on %v (%d)", c.Prefix, c.LogId)
-	schedule.Every(ctx, period, func(ctx context.Context) {
-		klog.V(1).Infof("Force internal get-sth for %v (%d)", c.Prefix, c.LogId)
-		if _, err := i.li.getSTH(ctx); err != nil {
-			klog.Warningf("Failed to retrieve STH for %v (%d): %v", c.Prefix, c.LogId, err)
-		}
-	})
-}
+// func (i *Instance) RunUpdateSTH(ctx context.Context, period time.Duration) {
+// 	c := i.li.instanceOpts.Validated.Config
+// 	klog.Infof("Start internal get-sth operations on %v (%d)", c.SubmissionPrefix, c.LogId)
+// 	schedule.Every(ctx, period, func(ctx context.Context) {
+// 		klog.V(1).Infof("Force internal get-sth for %v (%d)", c.SubmissionPrefix, c.LogId)
+// 		if _, err := i.li.getSTH(ctx); err != nil {
+// 			klog.Warningf("Failed to retrieve STH for %v (%d): %v", c.SubmissionPrefix, c.LogId, err)
+// 		}
+// 	})
+// }
 
 // GetPublicKey returns the public key from the instance's signer.
 func (i *Instance) GetPublicKey() crypto.PublicKey {
@@ -111,18 +111,14 @@ func SetUpInstance(ctx context.Context, opts InstanceOptions) (*Instance, error)
 	if err != nil {
 		return nil, err
 	}
-	handlers := logInfo.Handlers(opts.Validated.Config.Prefix)
-	return &Instance{Handlers: handlers, STHGetter: logInfo.sthGetter, li: logInfo}, nil
+	handlers := logInfo.Handlers(opts.Validated.Config.SubmissionPrefix)
+	return &Instance{Handlers: handlers, li: logInfo}, nil
 }
 
 func setUpLogInfo(ctx context.Context, opts InstanceOptions) (*logInfo, error) {
 	vCfg := opts.Validated
 	cfg := vCfg.Config
 
-	// Check config validity.
-	if !cfg.IsMirror && len(cfg.RootsPemFile) == 0 {
-		return nil, errors.New("need to specify RootsPemFile")
-	}
 	// Load the trusted roots.
 	roots := x509util.NewPEMCertPool()
 	for _, pemFile := range cfg.RootsPemFile {
@@ -132,30 +128,28 @@ func setUpLogInfo(ctx context.Context, opts InstanceOptions) (*logInfo, error) {
 	}
 
 	var signer crypto.Signer
-	if !cfg.IsMirror {
-		var err error
-		if signer, err = keys.NewSigner(ctx, vCfg.PrivKey); err != nil {
-			return nil, fmt.Errorf("failed to load private key: %v", err)
-		}
+	var err error
+	if signer, err = keys.NewSigner(ctx, vCfg.PrivKey); err != nil {
+		return nil, fmt.Errorf("failed to load private key: %v", err)
+	}
 
-		// If a public key has been configured for a log, check that it is consistent with the private key.
-		if vCfg.PubKey != nil {
-			switch pub := vCfg.PubKey.(type) {
-			case *ecdsa.PublicKey:
-				if !pub.Equal(signer.Public()) {
-					return nil, errors.New("public key is not consistent with private key")
-				}
-			case ed25519.PublicKey:
-				if !pub.Equal(signer.Public()) {
-					return nil, errors.New("public key is not consistent with private key")
-				}
-			case *rsa.PublicKey:
-				if !pub.Equal(signer.Public()) {
-					return nil, errors.New("public key is not consistent with private key")
-				}
-			default:
-				return nil, errors.New("failed to verify consistency of public key with private key")
+	// If a public key has been configured for a log, check that it is consistent with the private key.
+	if vCfg.PubKey != nil {
+		switch pub := vCfg.PubKey.(type) {
+		case *ecdsa.PublicKey:
+			if !pub.Equal(signer.Public()) {
+				return nil, errors.New("public key is not consistent with private key")
 			}
+		case ed25519.PublicKey:
+			if !pub.Equal(signer.Public()) {
+				return nil, errors.New("public key is not consistent with private key")
+			}
+		case *rsa.PublicKey:
+			if !pub.Equal(signer.Public()) {
+				return nil, errors.New("public key is not consistent with private key")
+			}
+		default:
+			return nil, errors.New("failed to verify consistency of public key with private key")
 		}
 	}
 
@@ -168,7 +162,6 @@ func setUpLogInfo(ctx context.Context, opts InstanceOptions) (*logInfo, error) {
 		acceptOnlyCA:    cfg.AcceptOnlyCa,
 		extKeyUsages:    vCfg.KeyUsages,
 	}
-	var err error
 	validationOpts.rejectExtIds, err = parseOIDs(cfg.RejectExtensions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse RejectExtensions: %v", err)

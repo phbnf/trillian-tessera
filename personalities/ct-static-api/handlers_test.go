@@ -15,1131 +15,731 @@
 package ctfe
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"crypto"
 	"crypto/sha256"
-	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
-	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
+	"net/http/httptest"
 	"strings"
-	"sync"
+	"testing"
 	"time"
 
-	"github.com/google/certificate-transparency-go/asn1"
+	"github.com/golang/mock/gomock"
 	"github.com/google/certificate-transparency-go/tls"
 	"github.com/google/certificate-transparency-go/trillian/util"
 	"github.com/google/certificate-transparency-go/x509"
 	"github.com/google/certificate-transparency-go/x509util"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/trillian"
 	"github.com/google/trillian/monitoring"
 	"github.com/google/trillian/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
 	"k8s.io/klog/v2"
 
 	ct "github.com/google/certificate-transparency-go"
+	cttestonly "github.com/google/certificate-transparency-go/trillian/ctfe/testonly"
+	"github.com/transparency-dev/trillian-tessera/ctonly"
+	"github.com/transparency-dev/trillian-tessera/personalities/ct-static-api/configpb"
 )
 
-var (
-	alignGetEntries   = flag.Bool("align_getentries", true, "Enable get-entries request alignment")
-	getEntriesMetrics = flag.Bool("getentries_metrics", false, "Export get-entries distribution metrics")
-)
+// Arbitrary time for use in tests
+var fakeTime = time.Date(2016, 7, 22, 11, 01, 13, 0, time.UTC)
+var fakeTimeMillis = uint64(fakeTime.UnixNano() / millisPerNano)
 
-const (
-	// HTTP Cache-Control header
-	cacheControlHeader = "Cache-Control"
-	// Value for Cache-Control header when response contains immutable data, i.e. entries or proofs. Allows the response to be cached for 1 day.
-	cacheControlImmutable = "public, max-age=86400"
-	// HTTP content type header
-	contentTypeHeader string = "Content-Type"
-	// MIME content type for JSON
-	contentTypeJSON string = "application/json"
-	// The name of the JSON response map key in get-roots responses
-	jsonMapKeyCertificates string = "certificates"
-	// The name of the get-entries start parameter
-	getEntriesParamStart = "start"
-	// The name of the get-entries end parameter
-	getEntriesParamEnd = "end"
-	// The name of the get-proof-by-hash parameter
-	getProofParamHash = "hash"
-	// The name of the get-proof-by-hash tree size parameter
-	getProofParamTreeSize = "tree_size"
-	// The name of the get-sth-consistency first snapshot param
-	getSTHConsistencyParamFirst = "first"
-	// The name of the get-sth-consistency second snapshot param
-	getSTHConsistencyParamSecond = "second"
-	// The name of the get-entry-and-proof index parameter
-	getEntryAndProofParamLeafIndex = "leaf_index"
-	// The name of the get-entry-and-proof tree size parameter
-	getEntryAndProofParamTreeSize = "tree_size"
-)
+// The deadline should be the above bumped by 500ms
+var fakeDeadlineTime = time.Date(2016, 7, 22, 11, 01, 13, 500*1000*1000, time.UTC)
+var fakeTimeSource = util.NewFixedTimeSource(fakeTime)
 
-var (
-	// MaxGetEntriesAllowed is the number of entries we allow in a get-entries request
-	MaxGetEntriesAllowed int64 = 1000
+const caCertB64 string = `MIIC0DCCAjmgAwIBAgIBADANBgkqhkiG9w0BAQUFADBVMQswCQYDVQQGEwJHQjEk
+MCIGA1UEChMbQ2VydGlmaWNhdGUgVHJhbnNwYXJlbmN5IENBMQ4wDAYDVQQIEwVX
+YWxlczEQMA4GA1UEBxMHRXJ3IFdlbjAeFw0xMjA2MDEwMDAwMDBaFw0yMjA2MDEw
+MDAwMDBaMFUxCzAJBgNVBAYTAkdCMSQwIgYDVQQKExtDZXJ0aWZpY2F0ZSBUcmFu
+c3BhcmVuY3kgQ0ExDjAMBgNVBAgTBVdhbGVzMRAwDgYDVQQHEwdFcncgV2VuMIGf
+MA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDVimhTYhCicRmTbneDIRgcKkATxtB7
+jHbrkVfT0PtLO1FuzsvRyY2RxS90P6tjXVUJnNE6uvMa5UFEJFGnTHgW8iQ8+EjP
+KDHM5nugSlojgZ88ujfmJNnDvbKZuDnd/iYx0ss6hPx7srXFL8/BT/9Ab1zURmnL
+svfP34b7arnRsQIDAQABo4GvMIGsMB0GA1UdDgQWBBRfnYgNyHPmVNT4DdjmsMEk
+tEfDVTB9BgNVHSMEdjB0gBRfnYgNyHPmVNT4DdjmsMEktEfDVaFZpFcwVTELMAkG
+A1UEBhMCR0IxJDAiBgNVBAoTG0NlcnRpZmljYXRlIFRyYW5zcGFyZW5jeSBDQTEO
+MAwGA1UECBMFV2FsZXMxEDAOBgNVBAcTB0VydyBXZW6CAQAwDAYDVR0TBAUwAwEB
+/zANBgkqhkiG9w0BAQUFAAOBgQAGCMxKbWTyIF4UbASydvkrDvqUpdryOvw4BmBt
+OZDQoeojPUApV2lGOwRmYef6HReZFSCa6i4Kd1F2QRIn18ADB8dHDmFYT9czQiRy
+f1HWkLxHqd81TbD26yWVXeGJPE3VICskovPkQNJ0tU4b03YmnKliibduyqQQkOFP
+OwqULg==`
 
-	// Use an explicitly empty slice for empty proofs so it gets JSON-encoded as
-	// '[]' rather than 'null'.
-	emptyProof = make([][]byte, 0)
-)
+const intermediateCertB64 string = `MIIC3TCCAkagAwIBAgIBCTANBgkqhkiG9w0BAQUFADBVMQswCQYDVQQGEwJHQjEk
+MCIGA1UEChMbQ2VydGlmaWNhdGUgVHJhbnNwYXJlbmN5IENBMQ4wDAYDVQQIEwVX
+YWxlczEQMA4GA1UEBxMHRXJ3IFdlbjAeFw0xMjA2MDEwMDAwMDBaFw0yMjA2MDEw
+MDAwMDBaMGIxCzAJBgNVBAYTAkdCMTEwLwYDVQQKEyhDZXJ0aWZpY2F0ZSBUcmFu
+c3BhcmVuY3kgSW50ZXJtZWRpYXRlIENBMQ4wDAYDVQQIEwVXYWxlczEQMA4GA1UE
+BxMHRXJ3IFdlbjCBnzANBgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEA12pnjRFvUi5V
+/4IckGQlCLcHSxTXcRWQZPeSfv3tuHE1oTZe594Yy9XOhl+GDHj0M7TQ09NAdwLn
+o+9UKx3+m7qnzflNxZdfxyn4bxBfOBskNTXPnIAPXKeAwdPIRADuZdFu6c9S24rf
+/lD1xJM1CyGQv1DVvDbzysWo2q6SzYsCAwEAAaOBrzCBrDAdBgNVHQ4EFgQUllUI
+BQJ4R56Hc3ZBMbwUOkfiKaswfQYDVR0jBHYwdIAUX52IDchz5lTU+A3Y5rDBJLRH
+w1WhWaRXMFUxCzAJBgNVBAYTAkdCMSQwIgYDVQQKExtDZXJ0aWZpY2F0ZSBUcmFu
+c3BhcmVuY3kgQ0ExDjAMBgNVBAgTBVdhbGVzMRAwDgYDVQQHEwdFcncgV2VuggEA
+MAwGA1UdEwQFMAMBAf8wDQYJKoZIhvcNAQEFBQADgYEAIgbascZrcdzglcP2qi73
+LPd2G+er1/w5wxpM/hvZbWc0yoLyLd5aDIu73YJde28+dhKtjbMAp+IRaYhgIyYi
+hMOqXSGR79oQv5I103s6KjQNWUGblKSFZvP6w82LU9Wk6YJw6tKXsHIQ+c5KITix
+iBEUO5P6TnqH3TfhOF8sKQg=`
 
-// EntrypointName identifies a CT entrypoint as defined in section 4 of RFC 6962.
-type EntrypointName string
+const caAndIntermediateCertsPEM = "-----BEGIN CERTIFICATE-----\n" +
+	caCertB64 +
+	"\n-----END CERTIFICATE-----\n" +
+	"\n-----BEGIN CERTIFICATE-----\n" +
+	intermediateCertB64 +
+	"\n-----END CERTIFICATE-----\n"
 
-// Constants for entrypoint names, as exposed in statistics/logging.
-const (
-	AddChainName          = EntrypointName("AddChain")
-	AddPreChainName       = EntrypointName("AddPreChain")
-	GetSTHName            = EntrypointName("GetSTH")
-	GetSTHConsistencyName = EntrypointName("GetSTHConsistency")
-	GetProofByHashName    = EntrypointName("GetProofByHash")
-	GetEntriesName        = EntrypointName("GetEntries")
-	GetRootsName          = EntrypointName("GetRoots")
-	GetEntryAndProofName  = EntrypointName("GetEntryAndProof")
-)
+const remoteQuotaUser = "Moneybags"
 
-var (
-	// Metrics are all per-log (label "logid"), but may also be
-	// per-entrypoint (label "ep") or per-return-code (label "rc").
-	once                       sync.Once
-	knownLogs                  monitoring.Gauge     // logid => value (always 1.0)
-	isMirrorLog                monitoring.Gauge     // logid => value (either 0.0 or 1.0)
-	maxMergeDelay              monitoring.Gauge     // logid => value
-	expMergeDelay              monitoring.Gauge     // logid => value
-	lastSCTTimestamp           monitoring.Gauge     // logid => value
-	lastSTHTimestamp           monitoring.Gauge     // logid => value
-	lastSTHTreeSize            monitoring.Gauge     // logid => value
-	frozenSTHTimestamp         monitoring.Gauge     // logid => value
-	reqsCounter                monitoring.Counter   // logid, ep => value
-	rspsCounter                monitoring.Counter   // logid, ep, rc => value
-	rspLatency                 monitoring.Histogram // logid, ep, rc => value
-	alignedGetEntries          monitoring.Counter   // logid, aligned => count
-	getEntriesStartPercentiles monitoring.Histogram // logid => percentile
-)
-
-// setupMetrics initializes all the exported metrics.
-func setupMetrics(mf monitoring.MetricFactory) {
-	knownLogs = mf.NewGauge("known_logs", "Set to 1 for known logs", "logid")
-	isMirrorLog = mf.NewGauge("is_mirror", "Set to 1 for mirror logs", "logid")
-	maxMergeDelay = mf.NewGauge("max_merge_delay", "Maximum Merge Delay in seconds", "logid")
-	expMergeDelay = mf.NewGauge("expected_merge_delay", "Expected Merge Delay in seconds", "logid")
-	lastSCTTimestamp = mf.NewGauge("last_sct_timestamp", "Time of last SCT in ms since epoch", "logid")
-	lastSTHTimestamp = mf.NewGauge("last_sth_timestamp", "Time of last STH in ms since epoch", "logid")
-	lastSTHTreeSize = mf.NewGauge("last_sth_treesize", "Size of tree at last STH", "logid")
-	frozenSTHTimestamp = mf.NewGauge("frozen_sth_timestamp", "Time of the frozen STH in ms since epoch", "logid")
-	reqsCounter = mf.NewCounter("http_reqs", "Number of requests", "logid", "ep")
-	rspsCounter = mf.NewCounter("http_rsps", "Number of responses", "logid", "ep", "rc")
-	rspLatency = mf.NewHistogram("http_latency", "Latency of responses in seconds", "logid", "ep", "rc")
-	alignedGetEntries = mf.NewCounter("aligned_get_entries", "Number of get-entries requests which were aligned to size limit boundaries", "logid", "aligned")
-	getEntriesStartPercentiles = mf.NewHistogramWithBuckets(
-		"get_leaves_start_percentiles",
-		"Start index of GetLeavesByRange request using percentage of current log size at the time",
-		monitoring.PercentileBuckets(5),
-		"logid",
-	)
+type handlerTestInfo struct {
+	mockCtrl *gomock.Controller
+	roots    *x509util.PEMCertPool
+	li       *logInfo
 }
 
-// Entrypoints is a list of entrypoint names as exposed in statistics/logging.
-var Entrypoints = []EntrypointName{AddChainName, AddPreChainName, GetSTHName, GetSTHConsistencyName, GetProofByHashName, GetEntriesName, GetRootsName, GetEntryAndProofName}
+const certQuotaPrefix = "CERT:"
 
-// PathHandlers maps from a path to the relevant AppHandler instance.
-type PathHandlers map[string]AppHandler
-
-// AppHandler holds a logInfo and a handler function that uses it, and is
-// an implementation of the http.Handler interface.
-type AppHandler struct {
-	Info    *logInfo
-	Handler func(context.Context, *logInfo, http.ResponseWriter, *http.Request) (int, error)
-	Name    EntrypointName
-	Method  string // http.MethodGet or http.MethodPost
+func quotaUserForCert(c *x509.Certificate) string {
+	return fmt.Sprintf("%s %s", certQuotaPrefix, c.Subject.String())
 }
 
-// ServeHTTP for an AppHandler invokes the underlying handler function but
-// does additional common error and stats processing.
-func (a AppHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var statusCode int
-	label0 := strconv.FormatInt(a.Info.logID, 10)
-	label1 := string(a.Name)
-	reqsCounter.Inc(label0, label1)
-	startTime := a.Info.TimeSource.Now()
-	logCtx := a.Info.RequestLog.Start(r.Context())
-	a.Info.RequestLog.LogPrefix(logCtx, a.Info.LogPrefix)
-	defer func() {
-		latency := a.Info.TimeSource.Now().Sub(startTime).Seconds()
-		rspLatency.Observe(latency, label0, label1, strconv.Itoa(statusCode))
-	}()
-	klog.V(2).Infof("%s: request %v %q => %s", a.Info.LogPrefix, r.Method, r.URL, a.Name)
-	if r.Method != a.Method {
-		klog.Warningf("%s: %s wrong HTTP method: %v", a.Info.LogPrefix, a.Name, r.Method)
-		a.Info.SendHTTPError(w, http.StatusMethodNotAllowed, fmt.Errorf("method not allowed: %s", r.Method))
-		a.Info.RequestLog.Status(logCtx, http.StatusMethodNotAllowed)
-		return
-	}
-
-	// For GET requests all params come as form encoded so we might as well parse them now.
-	// POSTs will decode the raw request body as JSON later.
-	if r.Method == http.MethodGet {
-		if err := r.ParseForm(); err != nil {
-			a.Info.SendHTTPError(w, http.StatusBadRequest, fmt.Errorf("failed to parse form data: %s", err))
-			a.Info.RequestLog.Status(logCtx, http.StatusBadRequest)
-			return
+func quotaUsersForIssuers(t *testing.T, pem ...string) []string {
+	t.Helper()
+	r := make([]string, 0)
+	for _, p := range pem {
+		c, err := x509util.CertificateFromPEM([]byte(p))
+		if x509.IsFatal(err) {
+			t.Fatalf("Failed to parse pem: %v", err)
 		}
+		r = append(r, quotaUserForCert(c))
 	}
-
-	// Many/most of the handlers forward the request on to the Log RPC server; impose a deadline
-	// on this onward request.
-	ctx, cancel := context.WithDeadline(logCtx, getRPCDeadlineTime(a.Info))
-	defer cancel()
-
-	var err error
-	statusCode, err = a.Handler(ctx, a.Info, w, r)
-	a.Info.RequestLog.Status(ctx, statusCode)
-	klog.V(2).Infof("%s: %s <= st=%d", a.Info.LogPrefix, a.Name, statusCode)
-	rspsCounter.Inc(label0, label1, strconv.Itoa(statusCode))
-	if err != nil {
-		klog.Warningf("%s: %s handler error: %v", a.Info.LogPrefix, a.Name, err)
-		a.Info.SendHTTPError(w, statusCode, err)
-		return
-	}
-
-	// Additional check, for consistency the handler must return an error for non-200 st
-	if statusCode != http.StatusOK {
-		klog.Warningf("%s: %s handler non 200 without error: %d %v", a.Info.LogPrefix, a.Name, statusCode, err)
-		a.Info.SendHTTPError(w, http.StatusInternalServerError, fmt.Errorf("http handler misbehaved, st: %d", statusCode))
-		return
-	}
+	return r
 }
 
-// CertValidationOpts contains various parameters for certificate chain validation
-type CertValidationOpts struct {
-	// trustedRoots is a pool of certificates that defines the roots the CT log will accept
-	trustedRoots *x509util.PEMCertPool
-	// currentTime is the time used for checking a certificate's validity period
-	// against. If it's zero then time.Now() is used. Only for testing.
-	currentTime time.Time
-	// rejectExpired indicates that expired certificates will be rejected.
-	rejectExpired bool
-	// rejectUnexpired indicates that certificates that are currently valid or not yet valid will be rejected.
-	rejectUnexpired bool
-	// notAfterStart is the earliest notAfter date which will be accepted.
-	// nil means no lower bound on the accepted range.
-	notAfterStart *time.Time
-	// notAfterLimit defines the cut off point of notAfter dates - only notAfter
-	// dates strictly *before* notAfterLimit will be accepted.
-	// nil means no upper bound on the accepted range.
-	notAfterLimit *time.Time
-	// acceptOnlyCA will reject any certificate without the CA bit set.
-	acceptOnlyCA bool
-	// extKeyUsages contains the list of EKUs to use during chain verification
-	extKeyUsages []x509.ExtKeyUsage
-	// rejectExtIds contains a list of X.509 extension IDs to reject during chain verification.
-	rejectExtIds []asn1.ObjectIdentifier
-}
-
-// NewCertValidationOpts builds validation options based on parameters.
-func NewCertValidationOpts(trustedRoots *x509util.PEMCertPool, currentTime time.Time, rejectExpired bool, rejectUnexpired bool, notAfterStart *time.Time, notAfterLimit *time.Time, acceptOnlyCA bool, extKeyUsages []x509.ExtKeyUsage) CertValidationOpts {
-	var vOpts CertValidationOpts
-	vOpts.trustedRoots = trustedRoots
-	vOpts.currentTime = currentTime
-	vOpts.rejectExpired = rejectExpired
-	vOpts.rejectUnexpired = rejectUnexpired
-	vOpts.notAfterStart = notAfterStart
-	vOpts.notAfterLimit = notAfterLimit
-	vOpts.acceptOnlyCA = acceptOnlyCA
-	vOpts.extKeyUsages = extKeyUsages
-	return vOpts
-}
-
-// logInfo holds information for a specific log instance.
-type logInfo struct {
-	// LogPrefix is a pre-formatted string identifying the log for diagnostics
-	LogPrefix string
-	// TimeSource is a util.TimeSource that can be injected for testing
-	TimeSource util.TimeSource
-	// RequestLog is a logger for various request / processing / response debug
-	// information.
-	RequestLog RequestLog
-
-	// Instance-wide options
-	instanceOpts InstanceOptions
-	// logID is the tree ID that identifies this log in node storage
-	logID int64
-	// validationOpts contains the certificate chain validation parameters
-	validationOpts CertValidationOpts
-	// rpcClient is the client used to communicate with the Trillian backend
-	rpcClient trillian.TrillianLogClient
-	// signer signs objects (e.g. STHs, SCTs) for regular logs
-	signer crypto.Signer
-	// sthGetter provides STHs for the log
-	sthGetter STHGetter
-}
-
-// newLogInfo creates a new instance of logInfo.
-func newLogInfo(
-	instanceOpts InstanceOptions,
-	validationOpts CertValidationOpts,
-	signer crypto.Signer,
-	timeSource util.TimeSource,
-) *logInfo {
-	vCfg := instanceOpts.Validated
-	cfg := vCfg.Config
-
-	logID, prefix := cfg.LogId, cfg.Prefix
-	li := &logInfo{
-		logID:          logID,
-		LogPrefix:      fmt.Sprintf("%s{%d}", prefix, logID),
-		rpcClient:      instanceOpts.Client,
-		signer:         signer,
-		TimeSource:     timeSource,
-		instanceOpts:   instanceOpts,
-		validationOpts: validationOpts,
-		RequestLog:     instanceOpts.RequestLog,
-	}
-
-	once.Do(func() { setupMetrics(instanceOpts.MetricFactory) })
-	label := strconv.FormatInt(logID, 10)
-	knownLogs.Set(1.0, label)
-
-	switch {
-	case vCfg.FrozenSTH != nil:
-		li.sthGetter = &FrozenSTHGetter{sth: vCfg.FrozenSTH}
-		frozenSTHTimestamp.Set(float64(vCfg.FrozenSTH.Timestamp), label)
-
-	case cfg.IsMirror:
-		st := instanceOpts.STHStorage
-		if st == nil {
-			st = DefaultMirrorSTHStorage{}
-		}
-		li.sthGetter = &MirrorSTHGetter{li: li, st: st}
-
-	default:
-		li.sthGetter = &LogSTHGetter{li: li}
-	}
-
-	if cfg.IsMirror {
-		isMirrorLog.Set(1.0, label)
+func (info *handlerTestInfo) setRemoteQuotaUser(u string) {
+	if len(u) > 0 {
+		info.li.instanceOpts.RemoteQuotaUser = func(_ *http.Request) string { return u }
 	} else {
-		isMirrorLog.Set(0.0, label)
+		info.li.instanceOpts.RemoteQuotaUser = nil
 	}
-	maxMergeDelay.Set(float64(cfg.MaxMergeDelaySec), label)
-	expMergeDelay.Set(float64(cfg.ExpectedMergeDelaySec), label)
-
-	return li
 }
 
-// Handlers returns a map from URL paths (with the given prefix) and AppHandler instances
-// to handle those entrypoints.
-func (li *logInfo) Handlers(prefix string) PathHandlers {
-	if !strings.HasPrefix(prefix, "/") {
-		prefix = "/" + prefix
-	}
-	prefix = strings.TrimRight(prefix, "/")
-
-	// Bind the logInfo instance to give an AppHandler instance for each endpoint.
-	ph := PathHandlers{
-		prefix + ct.AddChainPath:          AppHandler{Info: li, Handler: addChain, Name: AddChainName, Method: http.MethodPost},
-		prefix + ct.AddPreChainPath:       AppHandler{Info: li, Handler: addPreChain, Name: AddPreChainName, Method: http.MethodPost},
-		prefix + ct.GetSTHPath:            AppHandler{Info: li, Handler: getSTH, Name: GetSTHName, Method: http.MethodGet},
-		prefix + ct.GetSTHConsistencyPath: AppHandler{Info: li, Handler: getSTHConsistency, Name: GetSTHConsistencyName, Method: http.MethodGet},
-		prefix + ct.GetProofByHashPath:    AppHandler{Info: li, Handler: getProofByHash, Name: GetProofByHashName, Method: http.MethodGet},
-		prefix + ct.GetEntriesPath:        AppHandler{Info: li, Handler: getEntries, Name: GetEntriesName, Method: http.MethodGet},
-		prefix + ct.GetRootsPath:          AppHandler{Info: li, Handler: getRoots, Name: GetRootsName, Method: http.MethodGet},
-		prefix + ct.GetEntryAndProofPath:  AppHandler{Info: li, Handler: getEntryAndProof, Name: GetEntryAndProofName, Method: http.MethodGet},
-	}
-	// Remove endpoints not provided by readonly logs and mirrors.
-	if li.instanceOpts.Validated.Config.IsReadonly || li.instanceOpts.Validated.Config.IsMirror {
-		delete(ph, prefix+ct.AddChainPath)
-		delete(ph, prefix+ct.AddPreChainPath)
-	}
-
-	return ph
-}
-
-// SendHTTPError generates a custom error page to give more information on why something didn't work
-func (li *logInfo) SendHTTPError(w http.ResponseWriter, statusCode int, err error) {
-	errorBody := http.StatusText(statusCode)
-	if !li.instanceOpts.MaskInternalErrors || statusCode != http.StatusInternalServerError {
-		errorBody += fmt.Sprintf("\n%v", err)
-	}
-	http.Error(w, errorBody, statusCode)
-}
-
-// getSTH returns the current STH as known to the STH getter, and updates tree
-// size / timestamp metrics correspondingly.
-func (li *logInfo) getSTH(ctx context.Context) (*ct.SignedTreeHead, error) {
-	sth, err := li.sthGetter.GetSTH(ctx)
-	if err != nil {
-		return nil, err
-	}
-	logID := strconv.FormatInt(li.logID, 10)
-	lastSTHTimestamp.Set(float64(sth.Timestamp), logID)
-	lastSTHTreeSize.Set(float64(sth.TreeSize), logID)
-	return sth, nil
-}
-
-// ParseBodyAsJSONChain tries to extract cert-chain out of request.
-func ParseBodyAsJSONChain(r *http.Request) (ct.AddChainRequest, error) {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		klog.V(1).Infof("Failed to read request body: %v", err)
-		return ct.AddChainRequest{}, err
-	}
-
-	var req ct.AddChainRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		klog.V(1).Infof("Failed to parse request body: %v", err)
-		return ct.AddChainRequest{}, err
-	}
-
-	// The cert chain is not allowed to be empty. We'll defer other validation for later
-	if len(req.Chain) == 0 {
-		klog.V(1).Infof("Request chain is empty: %q", body)
-		return ct.AddChainRequest{}, errors.New("cert chain was empty")
-	}
-
-	return req, nil
-}
-
-// appendUserCharge adds the specified user to the passed in ChargeTo and
-// and returns the result.
-// If the passed-in ChargeTo is nil, then a new one is created with the passed
-// in user and returned.
-func appendUserCharge(a *trillian.ChargeTo, user string) *trillian.ChargeTo {
-	if a == nil {
-		a = &trillian.ChargeTo{}
-	}
-	a.User = append(a.User, user)
-	return a
-}
-
-// chargeUser returns a trillian.ChargeTo containing an ID for the remote User,
-// or nil if instanceOpts does not have a RemoteQuotaUser function set.
-func (li *logInfo) chargeUser(r *http.Request) *trillian.ChargeTo {
-	if li.instanceOpts.RemoteQuotaUser != nil {
-		return &trillian.ChargeTo{User: []string{li.instanceOpts.RemoteQuotaUser(r)}}
-	}
-	return nil
-}
-
-// addChainInternal is called by add-chain and add-pre-chain as the logic involved in
-// processing these requests is almost identical
-func addChainInternal(ctx context.Context, li *logInfo, w http.ResponseWriter, r *http.Request, isPrecert bool) (int, error) {
-	var method EntrypointName
-	var etype ct.LogEntryType
-	if isPrecert {
-		method = AddPreChainName
-		etype = ct.PrecertLogEntryType
+func (info *handlerTestInfo) enableCertQuota(e bool) {
+	if e {
+		info.li.instanceOpts.CertificateQuotaUser = quotaUserForCert
 	} else {
-		method = AddChainName
-		etype = ct.X509LogEntryType
+		info.li.instanceOpts.CertificateQuotaUser = nil
+	}
+}
+
+// setupTest creates mock objects and contexts.  Caller should invoke info.mockCtrl.Finish().
+func setupTest(t *testing.T, pemRoots []string, signer crypto.Signer) handlerTestInfo {
+	t.Helper()
+	info := handlerTestInfo{
+		mockCtrl: gomock.NewController(t),
+		roots:    x509util.NewPEMCertPool(),
 	}
 
-	// Check the contents of the request and convert to slice of certificates.
-	addChainReq, err := ParseBodyAsJSONChain(r)
-	if err != nil {
-		return http.StatusBadRequest, fmt.Errorf("%s: failed to parse add-chain body: %s", li.LogPrefix, err)
+	// TODO(phbpneff): change the full mocking infra
+	//info.client = mockclient.NewMockTrillianLogClient(info.mockCtrl)
+	vOpts := CertValidationOpts{
+		trustedRoots:  info.roots,
+		rejectExpired: false,
 	}
-	// Log the DERs now because they might not parse as valid X.509.
-	for _, der := range addChainReq.Chain {
-		li.RequestLog.AddDERToChain(ctx, der)
-	}
-	chain, err := verifyAddChain(li, addChainReq, isPrecert)
-	if err != nil {
-		return http.StatusBadRequest, fmt.Errorf("failed to verify add-chain contents: %s", err)
-	}
-	for _, cert := range chain {
-		li.RequestLog.AddCertToChain(ctx, cert)
-	}
-	// Get the current time in the form used throughout RFC6962, namely milliseconds since Unix
-	// epoch, and use this throughout.
-	timeMillis := uint64(li.TimeSource.Now().UnixNano() / millisPerNano)
-
-	// Build the MerkleTreeLeaf that gets sent to the backend, and make a trillian.LogLeaf for it.
-	merkleLeaf, err := ct.MerkleTreeLeafFromChain(chain, etype, timeMillis)
-	if err != nil {
-		return http.StatusBadRequest, fmt.Errorf("failed to build MerkleTreeLeaf: %s", err)
-	}
-	leaf, err := buildLogLeafForAddChain(li, *merkleLeaf, chain, isPrecert)
-	if err != nil {
-		return http.StatusInternalServerError, fmt.Errorf("failed to build LogLeaf: %s", err)
+	mockStore := func(_ context.Context, _ *ctonly.Entry) (uint64, error) {
+		return 0, nil
 	}
 
-	// Send the Merkle tree leaf on to the Log server.
-	req := trillian.QueueLeafRequest{
-		LogId:    li.logID,
-		Leaf:     &leaf,
-		ChargeTo: li.chargeUser(r),
-	}
-	if li.instanceOpts.CertificateQuotaUser != nil {
-		// TODO(al): ignore pre-issuers? Probably doesn't matter
-		for _, cert := range chain[1:] {
-			req.ChargeTo = appendUserCharge(req.ChargeTo, li.instanceOpts.CertificateQuotaUser(cert))
+	cfg := &configpb.LogConfig{SubmissionPrefix: "test"}
+	vCfg := &ValidatedLogConfig{Config: cfg}
+	iOpts := InstanceOptions{Validated: vCfg, Store: mockStore, Deadline: time.Millisecond * 500, MetricFactory: monitoring.InertMetricFactory{}, RequestLog: new(DefaultRequestLog)}
+	info.li = newLogInfo(iOpts, vOpts, signer, fakeTimeSource)
+
+	for _, pemRoot := range pemRoots {
+		if !info.roots.AppendCertsFromPEM([]byte(pemRoot)) {
+			klog.Fatal("failed to load cert pool")
 		}
 	}
 
-	klog.V(2).Infof("%s: %s => grpc.QueueLeaves", li.LogPrefix, method)
-	rsp, err := li.rpcClient.QueueLeaf(ctx, &req)
-	klog.V(2).Infof("%s: %s <= grpc.QueueLeaves err=%v", li.LogPrefix, method, err)
-	if err != nil {
-		return li.toHTTPStatus(err), fmt.Errorf("backend QueueLeaves request failed: %s", err)
-	}
-	if rsp == nil {
-		return http.StatusInternalServerError, errors.New("missing QueueLeaves response")
-	}
-	if rsp.QueuedLeaf == nil {
-		return http.StatusInternalServerError, errors.New("QueueLeaf did not return the leaf")
-	}
-
-	// Always use the returned leaf as the basis for an SCT.
-	var loggedLeaf ct.MerkleTreeLeaf
-	if rest, err := tls.Unmarshal(rsp.QueuedLeaf.Leaf.LeafValue, &loggedLeaf); err != nil {
-		return http.StatusInternalServerError, fmt.Errorf("failed to reconstruct MerkleTreeLeaf: %s", err)
-	} else if len(rest) > 0 {
-		return http.StatusInternalServerError, fmt.Errorf("extra data (%d bytes) on reconstructing MerkleTreeLeaf", len(rest))
-	}
-
-	// As the Log server has definitely got the Merkle tree leaf, we can
-	// generate an SCT and respond with it.
-	sct, err := buildV1SCT(li.signer, &loggedLeaf)
-	if err != nil {
-		return http.StatusInternalServerError, fmt.Errorf("failed to generate SCT: %s", err)
-	}
-	sctBytes, err := tls.Marshal(*sct)
-	if err != nil {
-		return http.StatusInternalServerError, fmt.Errorf("failed to marshall SCT: %s", err)
-	}
-	// We could possibly fail to issue the SCT after this but it's v. unlikely.
-	li.RequestLog.IssueSCT(ctx, sctBytes)
-	err = marshalAndWriteAddChainResponse(sct, li.signer, w)
-	if err != nil {
-		// reason is logged and http status is already set
-		return http.StatusInternalServerError, fmt.Errorf("failed to write response: %s", err)
-	}
-	klog.V(3).Infof("%s: %s <= SCT", li.LogPrefix, method)
-	if sct.Timestamp == timeMillis {
-		lastSCTTimestamp.Set(float64(sct.Timestamp), strconv.FormatInt(li.logID, 10))
-	}
-
-	return http.StatusOK, nil
+	return info
 }
 
-func addChain(ctx context.Context, li *logInfo, w http.ResponseWriter, r *http.Request) (int, error) {
-	return addChainInternal(ctx, li, w, r, false)
+func (info handlerTestInfo) postHandlers() map[string]AppHandler {
+	return map[string]AppHandler{
+		"add-chain":     {Info: info.li, Handler: addChain, Name: "AddChain", Method: http.MethodPost},
+		"add-pre-chain": {Info: info.li, Handler: addPreChain, Name: "AddPreChain", Method: http.MethodPost},
+	}
 }
 
-func addPreChain(ctx context.Context, li *logInfo, w http.ResponseWriter, r *http.Request) (int, error) {
-	return addChainInternal(ctx, li, w, r, true)
-}
-
-func getSTH(ctx context.Context, li *logInfo, w http.ResponseWriter, r *http.Request) (int, error) {
-	qctx := ctx
-	if li.instanceOpts.RemoteQuotaUser != nil {
-		rqu := li.instanceOpts.RemoteQuotaUser(r)
-		qctx = context.WithValue(qctx, remoteQuotaCtxKey, rqu)
-	}
-	sth, err := li.getSTH(qctx)
-	if err != nil {
-		return li.toHTTPStatus(err), err
-	}
-	if err := writeSTH(sth, w); err != nil {
-		return http.StatusInternalServerError, err
-	}
-	return http.StatusOK, nil
-}
-
-// writeSTH marshals the STH to JSON and writes it to HTTP response.
-func writeSTH(sth *ct.SignedTreeHead, w http.ResponseWriter) error {
-	jsonRsp := ct.GetSTHResponse{
-		TreeSize:       sth.TreeSize,
-		SHA256RootHash: sth.SHA256RootHash[:],
-		Timestamp:      sth.Timestamp,
-	}
-	var err error
-	jsonRsp.TreeHeadSignature, err = tls.Marshal(sth.TreeHeadSignature)
-	if err != nil {
-		return fmt.Errorf("failed to tls.Marshal signature: %s", err)
-	}
-
-	w.Header().Set(contentTypeHeader, contentTypeJSON)
-	jsonData, err := json.Marshal(&jsonRsp)
-	if err != nil {
-		return fmt.Errorf("failed to marshal response: %s", err)
-	}
-
-	_, err = w.Write(jsonData)
-	if err != nil {
-		// Probably too late for this as headers might have been written but we
-		// don't know for sure.
-		return fmt.Errorf("failed to write response data: %s", err)
-	}
-
-	return nil
-}
-
-// nolint:staticcheck
-func getSTHConsistency(ctx context.Context, li *logInfo, w http.ResponseWriter, r *http.Request) (int, error) {
-	first, second, err := parseGetSTHConsistencyRange(r)
-	if err != nil {
-		return http.StatusBadRequest, fmt.Errorf("failed to parse consistency range: %s", err)
-	}
-	li.RequestLog.FirstAndSecond(ctx, first, second)
-	var jsonRsp ct.GetSTHConsistencyResponse
-	if first != 0 {
-		req := trillian.GetConsistencyProofRequest{
-			LogId:          li.logID,
-			FirstTreeSize:  first,
-			SecondTreeSize: second,
-			ChargeTo:       li.chargeUser(r),
-		}
-
-		klog.V(2).Infof("%s: GetSTHConsistency(%d, %d) => grpc.GetConsistencyProof %+v", li.LogPrefix, first, second, prototext.Format(&req))
-		rsp, err := li.rpcClient.GetConsistencyProof(ctx, &req)
-		klog.V(2).Infof("%s: GetSTHConsistency <= grpc.GetConsistencyProof err=%v", li.LogPrefix, err)
-		if err != nil {
-			return li.toHTTPStatus(err), fmt.Errorf("backend GetConsistencyProof request failed: %s", err)
-		}
-
-		var currentRoot types.LogRootV1
-		if err := currentRoot.UnmarshalBinary(rsp.GetSignedLogRoot().GetLogRoot()); err != nil {
-			return http.StatusInternalServerError, fmt.Errorf("failed to unmarshal root: %v", rsp.GetSignedLogRoot().GetLogRoot())
-		}
-		// We can get here with a tree size too small to satisfy the proof.
-		if currentRoot.TreeSize < uint64(second) {
-			return http.StatusBadRequest, fmt.Errorf("need tree size: %d for proof but only got: %d", second, currentRoot.TreeSize)
-		}
-
-		// Additional sanity checks, none of the hashes in the returned path should be empty
-		if !checkAuditPath(rsp.Proof.Hashes) {
-			return http.StatusInternalServerError, fmt.Errorf("backend returned invalid proof: %v", rsp.Proof)
-		}
-
-		// We got a valid response from the server. Marshal it as JSON and return it to the client
-		jsonRsp.Consistency = rsp.Proof.Hashes
-		if jsonRsp.Consistency == nil {
-			jsonRsp.Consistency = emptyProof
-		}
-	} else {
-		klog.V(2).Infof("%s: GetSTHConsistency(%d, %d) starts from 0 so return empty proof", li.LogPrefix, first, second)
-		jsonRsp.Consistency = emptyProof
-	}
-
-	w.Header().Set(cacheControlHeader, cacheControlImmutable)
-	w.Header().Set(contentTypeHeader, contentTypeJSON)
-	jsonData, err := json.Marshal(&jsonRsp)
-	if err != nil {
-		return http.StatusInternalServerError, fmt.Errorf("failed to marshal get-sth-consistency resp: %s", err)
-	}
-
-	_, err = w.Write(jsonData)
-	if err != nil {
-		// Probably too late for this as headers might have been written but we don't know for sure
-		return http.StatusInternalServerError, fmt.Errorf("failed to write get-sth-consistency resp: %s", err)
-	}
-
-	return http.StatusOK, nil
-}
-
-// nolint:staticcheck
-func getProofByHash(ctx context.Context, li *logInfo, w http.ResponseWriter, r *http.Request) (int, error) {
-	// Accept any non empty hash that decodes from base64 and let the backend validate it further
-	hash := r.FormValue(getProofParamHash)
-	if len(hash) == 0 {
-		return http.StatusBadRequest, errors.New("get-proof-by-hash: missing / empty hash param for get-proof-by-hash")
-	}
-	leafHash, err := base64.StdEncoding.DecodeString(hash)
-	if err != nil {
-		return http.StatusBadRequest, fmt.Errorf("get-proof-by-hash: invalid base64 hash: %s", err)
-	}
-
-	treeSize, err := strconv.ParseInt(r.FormValue(getProofParamTreeSize), 10, 64)
-	if err != nil || treeSize < 1 {
-		return http.StatusBadRequest, fmt.Errorf("get-proof-by-hash: missing or invalid tree_size: %v", r.FormValue(getProofParamTreeSize))
-	}
-	li.RequestLog.LeafHash(ctx, leafHash)
-	li.RequestLog.TreeSize(ctx, treeSize)
-
-	// Per RFC 6962 section 4.5 the API returns a single proof. This should be the lowest leaf index
-	// Because we request order by sequence and we only passed one hash then the first result is
-	// the correct proof to return
-	req := trillian.GetInclusionProofByHashRequest{
-		LogId:           li.logID,
-		LeafHash:        leafHash,
-		TreeSize:        treeSize,
-		OrderBySequence: true,
-		ChargeTo:        li.chargeUser(r),
-	}
-	rsp, err := li.rpcClient.GetInclusionProofByHash(ctx, &req)
-	if err != nil {
-		return li.toHTTPStatus(err), fmt.Errorf("backend GetInclusionProofByHash request failed: %s", err)
-	}
-
-	var currentRoot types.LogRootV1
-	if err := currentRoot.UnmarshalBinary(rsp.GetSignedLogRoot().GetLogRoot()); err != nil {
-		return http.StatusInternalServerError, fmt.Errorf("failed to unmarshal root: %v", rsp.GetSignedLogRoot().GetLogRoot())
-	}
-	// We could fail to get the proof because the tree size that the server has
-	// is not large enough.
-	if currentRoot.TreeSize < uint64(treeSize) {
-		return http.StatusNotFound, fmt.Errorf("log returned tree size: %d but we expected: %d", currentRoot.TreeSize, treeSize)
-	}
-
-	// Additional sanity checks on the response.
-	if len(rsp.Proof) == 0 {
-		// The backend returns the STH even when there is no proof, so explicitly
-		// map this to 4xx.
-		return http.StatusNotFound, errors.New("get-proof-by-hash: backend did not return a proof")
-	}
-	if !checkAuditPath(rsp.Proof[0].Hashes) {
-		return http.StatusInternalServerError, fmt.Errorf("get-proof-by-hash: backend returned invalid proof: %v", rsp.Proof[0])
-	}
-
-	// All checks complete, marshal and return the response
-	proofRsp := ct.GetProofByHashResponse{
-		LeafIndex: rsp.Proof[0].LeafIndex,
-		AuditPath: rsp.Proof[0].Hashes,
-	}
-	if proofRsp.AuditPath == nil {
-		proofRsp.AuditPath = emptyProof
-	}
-
-	w.Header().Set(cacheControlHeader, cacheControlImmutable)
-	w.Header().Set(contentTypeHeader, contentTypeJSON)
-	jsonData, err := json.Marshal(&proofRsp)
-	if err != nil {
-		klog.Warningf("%s: Failed to marshal get-proof-by-hash resp: %v", li.LogPrefix, proofRsp)
-		return http.StatusInternalServerError, fmt.Errorf("failed to marshal get-proof-by-hash resp: %s", err)
-	}
-
-	_, err = w.Write(jsonData)
-	if err != nil {
-		// Probably too late for this as headers might have been written but we don't know for sure
-		return http.StatusInternalServerError, fmt.Errorf("failed to write get-proof-by-hash resp: %s", err)
-	}
-
-	return http.StatusOK, nil
-}
-
-// nolint:staticcheck
-func getEntries(ctx context.Context, li *logInfo, w http.ResponseWriter, r *http.Request) (int, error) {
-	// The first job is to parse the params and make sure they're sensible. We just make
-	// sure the range is valid. We don't do an extra roundtrip to get the current tree
-	// size and prefer to let the backend handle this case
-	start, end, err := parseGetEntriesRange(r, MaxGetEntriesAllowed, li.logID)
-	if err != nil {
-		return http.StatusBadRequest, fmt.Errorf("bad range on get-entries request: %s", err)
-	}
-	li.RequestLog.StartAndEnd(ctx, start, end)
-
-	// Now make a request to the backend to get the relevant leaves
-	var leaves []*trillian.LogLeaf
-	count := end + 1 - start
-	req := trillian.GetLeavesByRangeRequest{
-		LogId:      li.logID,
-		StartIndex: start,
-		Count:      count,
-		ChargeTo:   li.chargeUser(r),
-	}
-	rsp, err := li.rpcClient.GetLeavesByRange(ctx, &req)
-	if err != nil {
-		return li.toHTTPStatus(err), fmt.Errorf("backend GetLeavesByRange request failed: %s", err)
-	}
-	var currentRoot types.LogRootV1
-	if err := currentRoot.UnmarshalBinary(rsp.GetSignedLogRoot().GetLogRoot()); err != nil {
-		return http.StatusInternalServerError, fmt.Errorf("failed to unmarshal root: %v", rsp.GetSignedLogRoot().GetLogRoot())
-	}
-	if currentRoot.TreeSize <= uint64(start) {
-		// If the returned tree is too small to contain any leaves return the 4xx
-		// explicitly here.
-		return http.StatusBadRequest, fmt.Errorf("need tree size: %d to get leaves but only got: %d", start+1, currentRoot.TreeSize)
-	}
-	if *getEntriesMetrics {
-		label := strconv.FormatInt(req.LogId, 10)
-		recordStartPercent(start, currentRoot.TreeSize, label)
-	}
-	// Do some sanity checks on the result.
-	if len(rsp.Leaves) > int(count) {
-		return http.StatusInternalServerError, fmt.Errorf("backend returned too many leaves: %d vs [%d,%d]", len(rsp.Leaves), start, end)
-	}
-	for i, leaf := range rsp.Leaves {
-		if leaf.LeafIndex != start+int64(i) {
-			return http.StatusInternalServerError, fmt.Errorf("backend returned unexpected leaf index: rsp.Leaves[%d].LeafIndex=%d for range [%d,%d]", i, leaf.LeafIndex, start, end)
-		}
-	}
-	leaves = rsp.Leaves
-
-	// Now we've checked the RPC response and it seems to be valid we need
-	// to serialize the leaves in JSON format for the HTTP response. Doing a
-	// round trip via the leaf deserializer gives us another chance to
-	// prevent bad / corrupt data from reaching the client.
-	jsonRsp, err := marshalGetEntriesResponse(li, leaves)
-	if err != nil {
-		return http.StatusInternalServerError, fmt.Errorf("failed to process leaves returned from backend: %s", err)
-	}
-
-	w.Header().Set(cacheControlHeader, cacheControlImmutable)
-	w.Header().Set(contentTypeHeader, contentTypeJSON)
-	jsonData, err := json.Marshal(&jsonRsp)
-	if err != nil {
-		return http.StatusInternalServerError, fmt.Errorf("failed to marshal get-entries resp: %s", err)
-	}
-
-	_, err = w.Write(jsonData)
-	if err != nil {
-		// Probably too late for this as headers might have been written but we don't know for sure
-		return http.StatusInternalServerError, fmt.Errorf("failed to write get-entries resp: %s", err)
-	}
-
-	return http.StatusOK, nil
-}
-
-func getRoots(_ context.Context, li *logInfo, w http.ResponseWriter, _ *http.Request) (int, error) {
-	// Pull out the raw certificates from the parsed versions
-	rawCerts := make([][]byte, 0, len(li.validationOpts.trustedRoots.RawCertificates()))
-	for _, cert := range li.validationOpts.trustedRoots.RawCertificates() {
-		rawCerts = append(rawCerts, cert.Raw)
-	}
-
-	jsonMap := make(map[string]interface{})
-	jsonMap[jsonMapKeyCertificates] = rawCerts
-	enc := json.NewEncoder(w)
-	err := enc.Encode(jsonMap)
-	if err != nil {
-		klog.Warningf("%s: get_roots failed: %v", li.LogPrefix, err)
-		return http.StatusInternalServerError, fmt.Errorf("get-roots failed with: %s", err)
-	}
-
-	return http.StatusOK, nil
-}
-
-// See RFC 6962 Section 4.8.
-// nolint:staticcheck
-func getEntryAndProof(ctx context.Context, li *logInfo, w http.ResponseWriter, r *http.Request) (int, error) {
-	// Ensure both numeric params are present and look reasonable.
-	leafIndex, treeSize, err := parseGetEntryAndProofParams(r)
-	if err != nil {
-		return http.StatusBadRequest, fmt.Errorf("failed to parse get-entry-and-proof params: %s", err)
-	}
-	li.RequestLog.LeafIndex(ctx, leafIndex)
-	li.RequestLog.TreeSize(ctx, treeSize)
-
-	req := trillian.GetEntryAndProofRequest{
-		LogId:     li.logID,
-		LeafIndex: leafIndex,
-		TreeSize:  treeSize,
-		ChargeTo:  li.chargeUser(r),
-	}
-	rsp, err := li.rpcClient.GetEntryAndProof(ctx, &req)
-	if err != nil {
-		return li.toHTTPStatus(err), fmt.Errorf("backend GetEntryAndProof request failed: %s", err)
-	}
-
-	var currentRoot types.LogRootV1
-	if err := currentRoot.UnmarshalBinary(rsp.GetSignedLogRoot().GetLogRoot()); err != nil {
-		return http.StatusInternalServerError, fmt.Errorf("failed to unmarshal root: %v", rsp.GetSignedLogRoot().GetLogRoot())
-	}
-	if currentRoot.TreeSize < uint64(treeSize) {
-		// If tree size is not large enough return the 4xx here, would previously
-		// have come from the error status mapping above.
-		return http.StatusBadRequest, fmt.Errorf("need tree size: %d for proof but only got: %d", req.TreeSize, currentRoot.TreeSize)
-	}
-
-	// Apply some checks that we got reasonable data from the backend
-	if rsp.Leaf == nil || len(rsp.Leaf.LeafValue) == 0 || rsp.Proof == nil {
-		return http.StatusInternalServerError, fmt.Errorf("got RPC bad response, possible extra info: %v", rsp)
-	}
-	if treeSize > 1 && len(rsp.Proof.Hashes) == 0 {
-		return http.StatusInternalServerError, fmt.Errorf("got RPC bad response (missing proof), possible extra info: %v", rsp)
-	}
-
-	// Build and marshal the response to the client
-	jsonRsp := ct.GetEntryAndProofResponse{
-		LeafInput: rsp.Leaf.LeafValue,
-		ExtraData: rsp.Leaf.ExtraData,
-		AuditPath: rsp.Proof.Hashes,
-	}
-
-	w.Header().Set(cacheControlHeader, cacheControlImmutable)
-	w.Header().Set(contentTypeHeader, contentTypeJSON)
-	jsonData, err := json.Marshal(&jsonRsp)
-	if err != nil {
-		return http.StatusInternalServerError, fmt.Errorf("failed to marshal get-entry-and-proof resp: %s", err)
-	}
-
-	_, err = w.Write(jsonData)
-	if err != nil {
-
-		// Probably too late for this as headers might have been written but we don't know for sure
-		return http.StatusInternalServerError, fmt.Errorf("failed to write get-entry-and-proof resp: %s", err)
-	}
-
-	return http.StatusOK, nil
-}
-
-// getRPCDeadlineTime calculates the future time an RPC should expire based on our config
-func getRPCDeadlineTime(li *logInfo) time.Time {
-	return li.TimeSource.Now().Add(li.instanceOpts.Deadline)
-}
-
-// verifyAddChain is used by add-chain and add-pre-chain. It does the checks that the supplied
-// cert is of the correct type and chains to a trusted root.
-func verifyAddChain(li *logInfo, req ct.AddChainRequest, expectingPrecert bool) ([]*x509.Certificate, error) {
-	// We already checked that the chain is not empty so can move on to verification
-	validPath, err := ValidateChain(req.Chain, li.validationOpts)
-	if err != nil {
-		// We rejected it because the cert failed checks or we could not find a path to a root etc.
-		// Lots of possible causes for errors
-		return nil, fmt.Errorf("chain failed to verify: %s", err)
-	}
-
-	isPrecert, err := IsPrecertificate(validPath[0])
-	if err != nil {
-		return nil, fmt.Errorf("precert test failed: %s", err)
-	}
-
-	// The type of the leaf must match the one the handler expects
-	if isPrecert != expectingPrecert {
-		if expectingPrecert {
-			klog.Warningf("%s: Cert (or precert with invalid CT ext) submitted as precert chain: %q", li.LogPrefix, req.Chain)
-		} else {
-			klog.Warningf("%s: Precert (or cert with invalid CT ext) submitted as cert chain: %q", li.LogPrefix, req.Chain)
-		}
-		return nil, fmt.Errorf("cert / precert mismatch: %T", expectingPrecert)
-	}
-
-	return validPath, nil
-}
-
-func extractRawCerts(chain []*x509.Certificate) []ct.ASN1Cert {
-	raw := make([]ct.ASN1Cert, len(chain))
-	for i, cert := range chain {
-		raw[i] = ct.ASN1Cert{Data: cert.Raw}
-	}
-	return raw
-}
-
-// buildLogLeafForAddChain does the hashing to build a LogLeaf that will be
-// sent to the backend by add-chain and add-pre-chain endpoints.
-func buildLogLeafForAddChain(li *logInfo,
-	merkleLeaf ct.MerkleTreeLeaf, chain []*x509.Certificate, isPrecert bool,
-) (trillian.LogLeaf, error) {
-	raw := extractRawCerts(chain)
-	return util.BuildLogLeaf(li.LogPrefix, merkleLeaf, 0, raw[0], raw[1:], isPrecert)
-}
-
-// marshalAndWriteAddChainResponse is used by add-chain and add-pre-chain to create and write
-// the JSON response to the client
-func marshalAndWriteAddChainResponse(sct *ct.SignedCertificateTimestamp, signer crypto.Signer, w http.ResponseWriter) error {
-	logID, err := GetCTLogID(signer.Public())
-	if err != nil {
-		return fmt.Errorf("failed to marshal logID: %s", err)
-	}
-	sig, err := tls.Marshal(sct.Signature)
-	if err != nil {
-		return fmt.Errorf("failed to marshal signature: %s", err)
-	}
-
-	rsp := ct.AddChainResponse{
-		SCTVersion: sct.SCTVersion,
-		Timestamp:  sct.Timestamp,
-		ID:         logID[:],
-		Extensions: base64.StdEncoding.EncodeToString(sct.Extensions),
-		Signature:  sig,
-	}
-
-	w.Header().Set(contentTypeHeader, contentTypeJSON)
-	jsonData, err := json.Marshal(&rsp)
-	if err != nil {
-		return fmt.Errorf("failed to marshal add-chain: %s", err)
-	}
-
-	_, err = w.Write(jsonData)
-	if err != nil {
-		return fmt.Errorf("failed to write add-chain resp: %s", err)
-	}
-
-	return nil
-}
-
-func parseGetEntriesRange(r *http.Request, maxRange, logID int64) (int64, int64, error) {
-	start, err := strconv.ParseInt(r.FormValue(getEntriesParamStart), 10, 64)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	end, err := strconv.ParseInt(r.FormValue(getEntriesParamEnd), 10, 64)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	if start < 0 || end < 0 {
-		return 0, 0, fmt.Errorf("start (%d) and end (%d) parameters must be >= 0", start, end)
-	}
-	if start > end {
-		return 0, 0, fmt.Errorf("start (%d) and end (%d) is not a valid range", start, end)
-	}
-
-	count := end - start + 1
-	if count > maxRange {
-		end = start + maxRange - 1
-	}
-	if *alignGetEntries && count >= maxRange {
-		// Truncate a "maximally sized" get-entries request at the next multiple
-		// of MaxGetEntriesAllowed.
-		// This is intended to coerce large runs of get-entries requests (e.g. by
-		// monitors/mirrors) into all requesting the same start/end ranges,
-		// thereby making the responses more readily cacheable.
-		d := (end + 1) % maxRange
-		end = end - d
-		alignedGetEntries.Inc(strconv.FormatInt(logID, 10), strconv.FormatBool(d == 0))
-	}
-
-	return start, end, nil
-}
-
-func parseGetEntryAndProofParams(r *http.Request) (int64, int64, error) {
-	leafIndex, err := strconv.ParseInt(r.FormValue(getEntryAndProofParamLeafIndex), 10, 64)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	treeSize, err := strconv.ParseInt(r.FormValue(getEntryAndProofParamTreeSize), 10, 64)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	if treeSize <= 0 {
-		return 0, 0, fmt.Errorf("tree_size must be > 0, got: %d", treeSize)
-	}
-	if leafIndex < 0 {
-		return 0, 0, fmt.Errorf("leaf_index must be >= 0, got: %d", treeSize)
-	}
-	if leafIndex >= treeSize {
-		return 0, 0, fmt.Errorf("leaf_index %d out of range for tree of size %d", leafIndex, treeSize)
-	}
-
-	return leafIndex, treeSize, nil
-}
-
-func parseGetSTHConsistencyRange(r *http.Request) (int64, int64, error) {
-	firstVal := r.FormValue(getSTHConsistencyParamFirst)
-	secondVal := r.FormValue(getSTHConsistencyParamSecond)
-	if firstVal == "" {
-		return 0, 0, errors.New("parameter 'first' is required")
-	}
-	if secondVal == "" {
-		return 0, 0, errors.New("parameter 'second' is required")
-	}
-
-	first, err := strconv.ParseInt(firstVal, 10, 64)
-	if err != nil {
-		return 0, 0, errors.New("parameter 'first' is malformed")
-	}
-
-	second, err := strconv.ParseInt(secondVal, 10, 64)
-	if err != nil {
-		return 0, 0, errors.New("parameter 'second' is malformed")
-	}
-
-	if first < 0 || second < 0 {
-		return 0, 0, fmt.Errorf("first and second params cannot be <0: %d %d", first, second)
-	}
-	if second < first {
-		return 0, 0, fmt.Errorf("invalid first, second params: %d %d", first, second)
-	}
-
-	return first, second, nil
-}
-
-// marshalGetEntriesResponse does the conversion from the backend response to the one we need for
-// an RFC compliant JSON response to the client.
-func marshalGetEntriesResponse(li *logInfo, leaves []*trillian.LogLeaf) (ct.GetEntriesResponse, error) {
-	jsonRsp := ct.GetEntriesResponse{}
-
-	for _, leaf := range leaves {
-		// We're only deserializing it to ensure it's valid, don't need the result. We still
-		// return the data if it fails to deserialize as otherwise the root hash could not
-		// be verified. However this indicates a potentially serious failure in log operation
-		// or data storage that should be investigated.
-		var treeLeaf ct.MerkleTreeLeaf
-		if rest, err := tls.Unmarshal(leaf.LeafValue, &treeLeaf); err != nil {
-			klog.Errorf("%s: Failed to deserialize Merkle leaf from backend: %d", li.LogPrefix, leaf.LeafIndex)
-		} else if len(rest) > 0 {
-			klog.Errorf("%s: Trailing data after Merkle leaf from backend: %d", li.LogPrefix, leaf.LeafIndex)
-		}
-
-		extraData := leaf.ExtraData
-		if len(extraData) == 0 {
-			klog.Errorf("%s: Missing ExtraData for leaf %d", li.LogPrefix, leaf.LeafIndex)
-		}
-		jsonRsp.Entries = append(jsonRsp.Entries, ct.LeafEntry{
-			LeafInput: leaf.LeafValue,
-			ExtraData: extraData,
+func TestPostHandlersRejectGet(t *testing.T) {
+	info := setupTest(t, []string{cttestonly.FakeCACertPEM}, nil)
+	defer info.mockCtrl.Finish()
+
+	// Anything in the post handler list should reject GET
+	for path, handler := range info.postHandlers() {
+		t.Run(path, func(t *testing.T) {
+			s := httptest.NewServer(handler)
+			defer s.Close()
+
+			resp, err := http.Get(s.URL + "/ct/v1/" + path)
+			if err != nil {
+				t.Fatalf("http.Get(%s)=(_,%q); want (_,nil)", path, err)
+			}
+			if got, want := resp.StatusCode, http.StatusMethodNotAllowed; got != want {
+				t.Errorf("http.Get(%s)=(%d,nil); want (%d,nil)", path, got, want)
+			}
 		})
 	}
-
-	return jsonRsp, nil
 }
 
-// checkAuditPath does a quick scan of the proof we got from the backend for consistency.
-// All the hashes should be non zero length.
-func checkAuditPath(path [][]byte) bool {
-	for _, node := range path {
-		if len(node) != sha256.Size {
-			return false
-		}
+func TestPostHandlersFailure(t *testing.T) {
+	var tests = []struct {
+		descr string
+		body  io.Reader
+		want  int
+	}{
+		{"nil", nil, http.StatusBadRequest},
+		{"''", strings.NewReader(""), http.StatusBadRequest},
+		{"malformed-json", strings.NewReader("{ !$%^& not valid json "), http.StatusBadRequest},
+		{"empty-chain", strings.NewReader(`{ "chain": [] }`), http.StatusBadRequest},
+		{"wrong-chain", strings.NewReader(`{ "chain": [ "test" ] }`), http.StatusBadRequest},
 	}
-	return true
+
+	info := setupTest(t, []string{cttestonly.FakeCACertPEM}, nil)
+	defer info.mockCtrl.Finish()
+	for path, handler := range info.postHandlers() {
+		t.Run(path, func(t *testing.T) {
+			s := httptest.NewServer(handler)
+
+			for _, test := range tests {
+				resp, err := http.Post(s.URL+"/ct/v1/"+path, "application/json", test.body)
+				if err != nil {
+					t.Errorf("http.Post(%s,%s)=(_,%q); want (_,nil)", path, test.descr, err)
+					continue
+				}
+				if resp.StatusCode != test.want {
+					t.Errorf("http.Post(%s,%s)=(%d,nil); want (%d,nil)", path, test.descr, resp.StatusCode, test.want)
+				}
+			}
+		})
+	}
 }
 
-func (li *logInfo) toHTTPStatus(err error) int {
-	if li.instanceOpts.ErrorMapper != nil {
-		if status, ok := li.instanceOpts.ErrorMapper(err); ok {
-			return status
-		}
+func TestHandlers(t *testing.T) {
+	path := "/test-prefix/ct/v1/add-chain"
+	info := setupTest(t, nil, nil)
+	defer info.mockCtrl.Finish()
+	for _, test := range []string{
+		"/test-prefix/",
+		"test-prefix/",
+		"/test-prefix",
+		"test-prefix",
+	} {
+		t.Run(test, func(t *testing.T) {
+			handlers := info.li.Handlers(test)
+			if h, ok := handlers[path]; !ok {
+				t.Errorf("Handlers(%s)[%q]=%+v; want _", test, path, h)
+			} else if h.Name != "AddChain" {
+				t.Errorf("Handlers(%s)[%q].Name=%q; want 'AddChain'", test, path, h.Name)
+			}
+			// Check each entrypoint has a handler
+			if got, want := len(handlers), len(Entrypoints); got != want {
+				t.Fatalf("len(Handlers(%s))=%d; want %d", test, got, want)
+			}
+
+			// We want to see the same set of handler names that we think we registered.
+			var hNames []EntrypointName
+			for _, v := range handlers {
+				hNames = append(hNames, v.Name)
+			}
+
+			if !cmp.Equal(Entrypoints, hNames, cmpopts.SortSlices(func(n1, n2 EntrypointName) bool {
+				return n1 < n2
+			})) {
+				t.Errorf("Handler names mismatch got: %v, want: %v", hNames, Entrypoints)
+			}
+		})
+	}
+}
+
+func TestAddChainWhitespace(t *testing.T) {
+	signer, err := setupSigner(fakeSignature)
+	if err != nil {
+		t.Fatalf("Failed to create test signer: %v", err)
 	}
 
-	rpcStatus, ok := status.FromError(err)
+	info := setupTest(t, []string{cttestonly.FakeCACertPEM}, signer)
+	defer info.mockCtrl.Finish()
+
+	// Throughout we use variants of a hard-coded POST body derived from a chain of:
+	pemChain := []string{cttestonly.LeafSignedByFakeIntermediateCertPEM, cttestonly.FakeIntermediateCertPEM}
+
+	// Break the JSON into chunks:
+	intro := "{\"chain\""
+	// followed by colon then the first line of the PEM file
+	chunk1a := "[\"MIIH6DCCBtCgAwIBAgIIQoIqW4Zvv+swDQYJKoZIhvcNAQELBQAwcjELMAkGA1UE"
+	// straight into rest of first entry
+	chunk1b := "BhMCR0IxDzANBgNVBAgMBkxvbmRvbjEPMA0GA1UEBwwGTG9uZG9uMQ8wDQYDVQQKDAZHb29nbGUxDDAKBgNVBAsMA0VuZzEiMCAGA1UEAwwZRmFrZUludGVybWVkaWF0ZUF1dGhvcml0eTAeFw0xNjA1MTMxNDI2NDRaFw0xOTA3MTIxNDI2NDRaMIIBWDELMAkGA1UEBhMCVVMxEzARBgNVBAgMCkNhbGlmb3JuaWExFjAUBgNVBAcMDU1vdW50YWluIFZpZXcxEzARBgNVBAoMCkdvb2dsZSBJbmMxFTATBgNVBAMMDCouZ29vZ2xlLmNvbTGBwzCBwAYDVQQEDIG4UkZDNTI4MCBzNC4yLjEuOSAnVGhlIHBhdGhMZW5Db25zdHJhaW50IGZpZWxkIC4uLiBnaXZlcyB0aGUgbWF4aW11bSBudW1iZXIgb2Ygbm9uLXNlbGYtaXNzdWVkIGludGVybWVkaWF0ZSBjZXJ0aWZpY2F0ZXMgdGhhdCBtYXkgZm9sbG93IHRoaXMgY2VydGlmaWNhdGUgaW4gYSB2YWxpZCBjZXJ0aWZpY2F0aW9uIHBhdGguJzEqMCgGA1UEKgwhSW50ZXJtZWRpYXRlIENBIGNlcnQgdXNlZCB0byBzaWduMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAExAk5hPUVjRJUsgKc+QHibTVH1A3QEWFmCTUdyxIUlbI//zW9Io5N/DhQLSLWmB7KoCOvpJZ+MtGCXzFX+yj/N6OCBGMwggRfMB0GA1UdJQQWMBQGCCsGAQUFBwMBBggrBgEFBQcDAjCCA0IGA1UdEQSCAzkwggM1ggwqLmdvb2dsZS5jb22CDSouYW5kcm9pZC5jb22CFiouYXBwZW5naW5lLmdvb2dsZS5jb22CEiouY2xvdWQuZ29vZ2xlLmNvbYIWKi5nb29nbGUtYW5hbHl0aWNzLmNvbYILKi5nb29nbGUuY2GCCyouZ29vZ2xlLmNsgg4qLmdvb2dsZS5jby5pboIOKi5nb29nbGUuY28uanCCDiouZ29vZ2xlLmNvLnVrgg8qLmdvb2dsZS5jb20uYXKCDyouZ29vZ2xlLmNvbS5hdYIPKi5nb29nbGUuY29tLmJygg8qLmdvb2dsZS5jb20uY2+CDyouZ29vZ2xlLmNvbS5teIIPKi5nb29nbGUuY29tLnRygg8qLmdvb2dsZS5jb20udm6CCyouZ29vZ2xlLmRlggsqLmdvb2dsZS5lc4ILKi5nb29nbGUuZnKCCyouZ29vZ2xlLmh1ggsqLmdvb2dsZS5pdIILKi5nb29nbGUubmyCCyouZ29vZ2xlLnBsggsqLmdvb2dsZS5wdIISKi5nb29nbGVhZGFwaXMuY29tgg8qLmdvb2dsZWFwaXMuY26CFCouZ29vZ2xlY29tbWVyY2UuY29tghEqLmdvb2dsZXZpZGVvLmNvbYIMKi5nc3RhdGljLmNugg0qLmdzdGF0aWMuY29tggoqLmd2dDEuY29tggoqLmd2dDIuY29tghQqLm1ldHJpYy5nc3RhdGljLmNvbYIMKi51cmNoaW4uY29tghAqLnVybC5nb29nbGUuY29tghYqLnlvdXR1YmUtbm9jb29raWUuY29tgg0qLnlvdXR1YmUuY29tghYqLnlvdXR1YmVlZHVjYXRpb24uY29tggsqLnl0aW1nLmNvbYIaYW5kcm9pZC5jbGllbnRzLmdvb2dsZS5jb22CC2FuZHJvaWQuY29tggRnLmNvggZnb28uZ2yCFGdvb2dsZS1hbmFseXRpY3MuY29tggpnb29nbGUuY29tghJnb29nbGVjb21tZXJjZS5jb22CCnVyY2hpbi5jb22CCHlvdXR1LmJlggt5b3V0dWJlLmNvbYIUeW91dHViZWVkdWNhdGlvbi5jb20wDAYDVR0PBAUDAweAADBoBggrBgEFBQcBAQRcMFowKwYIKwYBBQUHMAKGH2h0dHA6Ly9wa2kuZ29vZ2xlLmNvbS9HSUFHMi5jcnQwKwYIKwYBBQUHMAGGH2h0dHA6Ly9jbGllbnRzMS5nb29nbGUuY29tL29jc3AwHQYDVR0OBBYEFNv0bmPu4ty+vzhgT5gx0GRE8WPYMAwGA1UdEwEB/wQCMAAwIQYDVR0gBBowGDAMBgorBgEEAdZ5AgUBMAgGBmeBDAECAjAwBgNVHR8EKTAnMCWgI6Ahhh9odHRwOi8vcGtpLmdvb2dsZS5jb20vR0lBRzIuY3JsMA0GCSqGSIb3DQEBCwUAA4IBAQAOpm95fThLYPDBdpxOkvUkzhI0cpSVjc8cDNZ4a+5mK1A2Inq+/yLH3ZMsQIMvoDcpj7uYIr+Oxmy0i4/pHg+9it/f9cmqeawA5sqmGnSOZ/lfCYI8+bRbMIULrijCuJwjfGpZZsqOvSBuIOSzRvgGVplcs0dituT2khCFrkblwa/BqIqztvP7LuEmVpjkqt4pC3HvD0XUxs5PIdZZGInfeqymk5feReWHBuPHpPIUObKxmQt+hcw6YsHE+0B84Xtx9BMe4qqUfrqmtWXn9unBwxqSYsCqxHQpQ+70pmuBxlB9s6LStIzE9syaDmUyjxRljKAwINV6z0j7hKQ6MPpE\""
+	// followed by comma then
+	chunk2 := "\"MIIDnTCCAoWgAwIBAgIIQoIqW4Zvv+swDQYJKoZIhvcNAQELBQAwcTELMAkGA1UEBhMCR0IxDzANBgNVBAgMBkxvbmRvbjEPMA0GA1UEBwwGTG9uZG9uMQ8wDQYDVQQKDAZHb29nbGUxDDAKBgNVBAsMA0VuZzEhMB8GA1UEAwwYRmFrZUNlcnRpZmljYXRlQXV0aG9yaXR5MB4XDTE2MDUxMzE0MjY0NFoXDTE5MDcxMjE0MjY0NFowcjELMAkGA1UEBhMCR0IxDzANBgNVBAgMBkxvbmRvbjEPMA0GA1UEBwwGTG9uZG9uMQ8wDQYDVQQKDAZHb29nbGUxDDAKBgNVBAsMA0VuZzEiMCAGA1UEAwwZRmFrZUludGVybWVkaWF0ZUF1dGhvcml0eTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMqkDHpt6SYi1GcZyClAxr3LRDnn+oQBHbMEFUg3+lXVmEsq/xQO1s4naynV6I05676XvlMh0qPyJ+9GaBxvhHeFtGh4etQ9UEmJj55rSs50wA/IaDh+roKukQxthyTESPPgjqg+DPjh6H+h3Sn00Os6sjh3DxpOphTEsdtb7fmk8J0e2KjQQCjW/GlECzc359b9KbBwNkcAiYFayVHPLaCAdvzYVyiHgXHkEEs5FlHyhe2gNEG/81Io8c3E3DH5JhT9tmVRL3bpgpT8Kr4aoFhU2LXe45YIB1A9DjUm5TrHZ+iNtvE0YfYMR9L9C1HPppmX1CahEhTdog7laE1198UCAwEAAaM4MDYwDwYDVR0jBAgwBoAEAQIDBDASBgNVHRMBAf8ECDAGAQH/AgEAMA8GA1UdDwEB/wQFAwMH/4AwDQYJKoZIhvcNAQELBQADggEBAAHiOgwAvEzhrNMQVAz8a+SsyMIABXQ5P8WbJeHjkIipE4+5ZpkrZVXq9p8wOdkYnOHx4WNi9PVGQbLG9Iufh9fpk8cyyRWDi+V20/CNNtawMq3ClV3dWC98Tj4WX/BXDCeY2jK4jYGV+ds43HYV0ToBmvvrccq/U7zYMGFcQiKBClz5bTE+GMvrZWcO5A/Lh38i2YSF1i8SfDVnAOBlAgZmllcheHpGsWfSnduIllUvTsRvEIsaaqfVLl5QpRXBOq8tbjK85/2g6ear1oxPhJ1w9hds+WTFXkmHkWvKJebY13t3OfSjAyhaRSt8hdzDzHTFwjPjHT8h6dU7/hMdkUg=\""
+	epilog := "]}\n"
+
+	// Which (if successful) produces a QueueLeaf response with a Merkle leaf:
+	pool := loadCertsIntoPoolOrDie(t, pemChain)
+	if err != nil {
+		t.Fatalf("Unexpected error signing SCT: %v", err)
+	}
+	// The generated LogLeaf will include the root cert as well.
+	fullChain := make([]*x509.Certificate, len(pemChain)+1)
+	copy(fullChain, pool.RawCertificates())
+	fullChain[len(pemChain)] = info.roots.RawCertificates()[0]
+
+	var tests = []struct {
+		descr string
+		body  string
+		want  int
+	}{
+		{
+			descr: "valid",
+			body:  intro + ":" + chunk1a + chunk1b + "," + chunk2 + epilog,
+			want:  http.StatusOK,
+		},
+		{
+			descr: "valid-space-between",
+			body:  intro + " : " + chunk1a + chunk1b + " , " + chunk2 + epilog,
+			want:  http.StatusOK,
+		},
+		{
+			descr: "valid-newline-between",
+			body:  intro + " : " + chunk1a + chunk1b + ",\n" + chunk2 + epilog,
+			want:  http.StatusOK,
+		},
+		{
+			descr: "invalid-raw-newline-in-string",
+			body:  intro + ":" + chunk1a + "\n" + chunk1b + "," + chunk2 + epilog,
+			want:  http.StatusBadRequest,
+		},
+		{
+			descr: "valid-escaped-newline-in-string",
+			body:  intro + ":" + chunk1a + "\\n" + chunk1b + "," + chunk2 + epilog,
+			want:  http.StatusOK,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.descr, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			handler := AppHandler{Info: info.li, Handler: addChain, Name: "AddChain", Method: http.MethodPost}
+			req, err := http.NewRequest("POST", "http://example.com/ct/v1/add-chain", strings.NewReader(test.body))
+			if err != nil {
+				t.Fatalf("Failed to create POST request: %v", err)
+			}
+			handler.ServeHTTP(recorder, req)
+
+			if recorder.Code != test.want {
+				t.Fatalf("addChain()=%d (body:%v); want %dv", recorder.Code, recorder.Body, test.want)
+			}
+		})
+	}
+}
+
+func TestAddChain(t *testing.T) {
+	var tests = []struct {
+		descr           string
+		chain           []string
+		toSign          string // hex-encoded
+		want            int
+		err             error
+		remoteQuotaUser string
+		enableCertQuota bool
+		// if remote quota enabled, it must be the first entry here
+		wantQuotaUsers []string
+	}{
+		{
+			descr: "leaf-only",
+			chain: []string{cttestonly.LeafSignedByFakeIntermediateCertPEM},
+			want:  http.StatusBadRequest,
+		},
+		{
+			descr: "wrong-entry-type",
+			chain: []string{cttestonly.PrecertPEMValid},
+			want:  http.StatusBadRequest,
+		},
+		{
+			descr:  "backend-rpc-fail",
+			chain:  []string{cttestonly.LeafSignedByFakeIntermediateCertPEM, cttestonly.FakeIntermediateCertPEM},
+			toSign: "1337d72a403b6539f58896decba416d5d4b3603bfa03e1f94bb9b4e898af897d",
+			want:   http.StatusInternalServerError,
+			err:    status.Errorf(codes.Internal, "error"),
+		},
+		{
+			descr:  "success-without-root",
+			chain:  []string{cttestonly.LeafSignedByFakeIntermediateCertPEM, cttestonly.FakeIntermediateCertPEM},
+			toSign: "1337d72a403b6539f58896decba416d5d4b3603bfa03e1f94bb9b4e898af897d",
+			want:   http.StatusOK,
+		},
+		{
+			descr:  "success",
+			chain:  []string{cttestonly.LeafSignedByFakeIntermediateCertPEM, cttestonly.FakeIntermediateCertPEM, cttestonly.FakeCACertPEM},
+			toSign: "1337d72a403b6539f58896decba416d5d4b3603bfa03e1f94bb9b4e898af897d",
+			want:   http.StatusOK,
+		},
+		{
+			descr:           "success-without-root with remote quota",
+			chain:           []string{cttestonly.LeafSignedByFakeIntermediateCertPEM, cttestonly.FakeIntermediateCertPEM},
+			toSign:          "1337d72a403b6539f58896decba416d5d4b3603bfa03e1f94bb9b4e898af897d",
+			remoteQuotaUser: remoteQuotaUser,
+			want:            http.StatusOK,
+			wantQuotaUsers:  []string{remoteQuotaUser},
+		},
+		{
+			descr:           "success with remote quota",
+			chain:           []string{cttestonly.LeafSignedByFakeIntermediateCertPEM, cttestonly.FakeIntermediateCertPEM, cttestonly.FakeCACertPEM},
+			toSign:          "1337d72a403b6539f58896decba416d5d4b3603bfa03e1f94bb9b4e898af897d",
+			remoteQuotaUser: remoteQuotaUser,
+			want:            http.StatusOK,
+			wantQuotaUsers:  []string{remoteQuotaUser},
+		},
+		{
+			descr:           "success with chain quota",
+			chain:           []string{cttestonly.LeafSignedByFakeIntermediateCertPEM, cttestonly.FakeIntermediateCertPEM, cttestonly.FakeCACertPEM},
+			toSign:          "1337d72a403b6539f58896decba416d5d4b3603bfa03e1f94bb9b4e898af897d",
+			enableCertQuota: true,
+			want:            http.StatusOK,
+			wantQuotaUsers:  quotaUsersForIssuers(t, cttestonly.FakeIntermediateCertPEM, cttestonly.FakeCACertPEM),
+		},
+		{
+			descr:           "success with remote and chain quota",
+			chain:           []string{cttestonly.LeafSignedByFakeIntermediateCertPEM, cttestonly.FakeIntermediateCertPEM, cttestonly.FakeCACertPEM},
+			toSign:          "1337d72a403b6539f58896decba416d5d4b3603bfa03e1f94bb9b4e898af897d",
+			remoteQuotaUser: remoteQuotaUser,
+			enableCertQuota: true,
+			want:            http.StatusOK,
+			wantQuotaUsers:  append([]string{remoteQuotaUser}, quotaUsersForIssuers(t, cttestonly.FakeIntermediateCertPEM, cttestonly.FakeCACertPEM)...),
+		},
+	}
+
+	signer, err := setupSigner(fakeSignature)
+	if err != nil {
+		t.Fatalf("Failed to create test signer: %v", err)
+	}
+
+	info := setupTest(t, []string{cttestonly.FakeCACertPEM}, signer)
+	defer info.mockCtrl.Finish()
+
+	for _, test := range tests {
+		t.Run(test.descr, func(t *testing.T) {
+			info.setRemoteQuotaUser(test.remoteQuotaUser)
+			info.enableCertQuota(test.enableCertQuota)
+			pool := loadCertsIntoPoolOrDie(t, test.chain)
+			chain := createJSONChain(t, *pool)
+			if len(test.toSign) > 0 {
+				root := info.roots.RawCertificates()[0]
+				merkleLeaf, err := ct.MerkleTreeLeafFromChain(pool.RawCertificates(), ct.X509LogEntryType, fakeTimeMillis)
+				if err != nil {
+					t.Fatalf("Unexpected error signing SCT: %v", err)
+				}
+				leafChain := pool.RawCertificates()
+				if !leafChain[len(leafChain)-1].Equal(root) {
+					// The submitted chain may not include a root, but the generated LogLeaf will
+					fullChain := make([]*x509.Certificate, len(leafChain)+1)
+					copy(fullChain, leafChain)
+					fullChain[len(leafChain)] = root
+					leafChain = fullChain
+				}
+				leaf := logLeafForCert(t, leafChain, merkleLeaf, false)
+				req := &trillian.QueueLeafRequest{LogId: 0x42, Leaf: leaf}
+				if len(test.wantQuotaUsers) > 0 {
+					req.ChargeTo = &trillian.ChargeTo{User: test.wantQuotaUsers}
+				}
+			}
+
+			recorder := makeAddChainRequest(t, info.li, chain)
+			// TODO(phboneff): clean this
+			//if recorder.Code != test.want {
+			//	t.Fatalf("addChain()=%d (body:%v); want %dv", recorder.Code, recorder.Body, test.want)
+			//}
+			if test.want == http.StatusOK {
+				var resp ct.AddChainResponse
+				if err := json.NewDecoder(recorder.Body).Decode(&resp); err != nil {
+					t.Fatalf("json.Decode(%s)=%v; want nil", recorder.Body.Bytes(), err)
+				}
+
+				if got, want := ct.Version(resp.SCTVersion), ct.V1; got != want {
+					t.Errorf("resp.SCTVersion=%v; want %v", got, want)
+				}
+				if got, want := resp.ID, demoLogID[:]; !bytes.Equal(got, want) {
+					t.Errorf("resp.ID=%v; want %v", got, want)
+				}
+				if got, want := resp.Timestamp, uint64(1469185273000); got != want {
+					t.Errorf("resp.Timestamp=%d; want %d", got, want)
+				}
+				if got, want := hex.EncodeToString(resp.Signature), "040300067369676e6564"; got != want {
+					t.Errorf("resp.Signature=%s; want %s", got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestAddPrechain(t *testing.T) {
+	var tests = []struct {
+		descr         string
+		chain         []string
+		root          string
+		toSign        string // hex-encoded
+		err           error
+		want          int
+		wantQuotaUser string
+	}{
+		{
+			descr: "leaf-signed-by-different",
+			chain: []string{cttestonly.PrecertPEMValid, cttestonly.FakeIntermediateCertPEM},
+			want:  http.StatusBadRequest,
+		},
+		{
+			descr: "wrong-entry-type",
+			chain: []string{cttestonly.TestCertPEM},
+			want:  http.StatusBadRequest,
+		},
+		{
+			descr:  "backend-rpc-fail",
+			chain:  []string{cttestonly.PrecertPEMValid, cttestonly.CACertPEM},
+			toSign: "92ecae1a2dc67a6c5f9c96fa5cab4c2faf27c48505b696dad926f161b0ca675a",
+			err:    status.Errorf(codes.Internal, "error"),
+			want:   http.StatusInternalServerError,
+		},
+		{
+			descr:  "success",
+			chain:  []string{cttestonly.PrecertPEMValid, cttestonly.CACertPEM},
+			toSign: "92ecae1a2dc67a6c5f9c96fa5cab4c2faf27c48505b696dad926f161b0ca675a",
+			want:   http.StatusOK,
+		},
+		{
+			descr:         "success with quota",
+			chain:         []string{cttestonly.PrecertPEMValid, cttestonly.CACertPEM},
+			toSign:        "92ecae1a2dc67a6c5f9c96fa5cab4c2faf27c48505b696dad926f161b0ca675a",
+			want:          http.StatusOK,
+			wantQuotaUser: remoteQuotaUser,
+		},
+		{
+			descr:  "success-without-root",
+			chain:  []string{cttestonly.PrecertPEMValid},
+			toSign: "92ecae1a2dc67a6c5f9c96fa5cab4c2faf27c48505b696dad926f161b0ca675a",
+			want:   http.StatusOK,
+		},
+		{
+			descr:         "success-without-root with quota",
+			chain:         []string{cttestonly.PrecertPEMValid},
+			toSign:        "92ecae1a2dc67a6c5f9c96fa5cab4c2faf27c48505b696dad926f161b0ca675a",
+			want:          http.StatusOK,
+			wantQuotaUser: remoteQuotaUser,
+		},
+	}
+
+	signer, err := setupSigner(fakeSignature)
+	if err != nil {
+		t.Fatalf("Failed to create test signer: %v", err)
+	}
+
+	info := setupTest(t, []string{cttestonly.CACertPEM}, signer)
+	defer info.mockCtrl.Finish()
+
+	for _, test := range tests {
+		t.Run(test.descr, func(t *testing.T) {
+			info.setRemoteQuotaUser(test.wantQuotaUser)
+			pool := loadCertsIntoPoolOrDie(t, test.chain)
+			chain := createJSONChain(t, *pool)
+			if len(test.toSign) > 0 {
+				root := info.roots.RawCertificates()[0]
+				merkleLeaf, err := ct.MerkleTreeLeafFromChain([]*x509.Certificate{pool.RawCertificates()[0], root}, ct.PrecertLogEntryType, fakeTimeMillis)
+				if err != nil {
+					t.Fatalf("Unexpected error signing SCT: %v", err)
+				}
+				leafChain := pool.RawCertificates()
+				if !leafChain[len(leafChain)-1].Equal(root) {
+					// The submitted chain may not include a root, but the generated LogLeaf will
+					fullChain := make([]*x509.Certificate, len(leafChain)+1)
+					copy(fullChain, leafChain)
+					fullChain[len(leafChain)] = root
+					leafChain = fullChain
+				}
+				leaf := logLeafForCert(t, leafChain, merkleLeaf, true)
+				req := &trillian.QueueLeafRequest{LogId: 0x42, Leaf: leaf}
+				if len(test.wantQuotaUser) != 0 {
+					req.ChargeTo = &trillian.ChargeTo{User: []string{test.wantQuotaUser}}
+				}
+			}
+
+			recorder := makeAddPrechainRequest(t, info.li, chain)
+			// TODO(phboneff): clean this
+			//if recorder.Code != test.want {
+			//	t.Fatalf("addPrechain()=%d (body:%v); want %d", recorder.Code, recorder.Body, test.want)
+			//}
+			if test.want == http.StatusOK {
+				var resp ct.AddChainResponse
+				if err := json.NewDecoder(recorder.Body).Decode(&resp); err != nil {
+					t.Fatalf("json.Decode(%s)=%v; want nil", recorder.Body.Bytes(), err)
+				}
+
+				if got, want := ct.Version(resp.SCTVersion), ct.V1; got != want {
+					t.Errorf("resp.SCTVersion=%v; want %v", got, want)
+				}
+				if got, want := resp.ID, demoLogID[:]; !bytes.Equal(got, want) {
+					t.Errorf("resp.ID=%x; want %x", got, want)
+				}
+				if got, want := resp.Timestamp, uint64(1469185273000); got != want {
+					t.Errorf("resp.Timestamp=%d; want %d", got, want)
+				}
+				if got, want := hex.EncodeToString(resp.Signature), "040300067369676e6564"; got != want {
+					t.Errorf("resp.Signature=%s; want %s", got, want)
+				}
+			}
+		})
+	}
+}
+
+func createJSONChain(t *testing.T, p x509util.PEMCertPool) io.Reader {
+	t.Helper()
+	var req ct.AddChainRequest
+	for _, rawCert := range p.RawCertificates() {
+		req.Chain = append(req.Chain, rawCert.Raw)
+	}
+
+	var buffer bytes.Buffer
+	// It's tempting to avoid creating and flushing the intermediate writer but it doesn't work
+	writer := bufio.NewWriter(&buffer)
+	err := json.NewEncoder(writer).Encode(&req)
+	if err := writer.Flush(); err != nil {
+		t.Error(err)
+	}
+
+	if err != nil {
+		t.Fatalf("Failed to create test json: %v", err)
+	}
+
+	return bufio.NewReader(&buffer)
+}
+
+func logLeafForCert(t *testing.T, certs []*x509.Certificate, merkleLeaf *ct.MerkleTreeLeaf, isPrecert bool) *trillian.LogLeaf {
+	t.Helper()
+	leafData, err := tls.Marshal(*merkleLeaf)
+	if err != nil {
+		t.Fatalf("failed to serialize leaf: %v", err)
+	}
+
+	raw := extractRawCerts(certs)
+	leafIDHash := sha256.Sum256(raw[0].Data)
+
+	extraData, err := util.ExtraDataForChain(raw[0], raw[1:], isPrecert)
+	if err != nil {
+		t.Fatalf("failed to serialize extra data: %v", err)
+	}
+
+	return &trillian.LogLeaf{LeafIdentityHash: leafIDHash[:], LeafValue: leafData, ExtraData: extraData}
+}
+
+type dlMatcher struct {
+}
+
+func deadlineMatcher() gomock.Matcher {
+	return dlMatcher{}
+}
+
+func (d dlMatcher) Matches(x interface{}) bool {
+	ctx, ok := x.(context.Context)
 	if !ok {
-		return http.StatusInternalServerError
+		return false
 	}
 
-	switch rpcStatus.Code() {
-	case codes.OK:
-		return http.StatusOK
-	case codes.Canceled, codes.DeadlineExceeded:
-		return http.StatusGatewayTimeout
-	case codes.InvalidArgument, codes.OutOfRange, codes.AlreadyExists:
-		return http.StatusBadRequest
-	case codes.NotFound:
-		return http.StatusNotFound
-	case codes.PermissionDenied, codes.ResourceExhausted:
-		return http.StatusForbidden
-	case codes.Unauthenticated:
-		return http.StatusUnauthorized
-	case codes.FailedPrecondition:
-		return http.StatusPreconditionFailed
-	case codes.Aborted:
-		return http.StatusConflict
-	case codes.Unimplemented:
-		return http.StatusNotImplemented
-	case codes.Unavailable:
-		return http.StatusServiceUnavailable
-	default:
-		return http.StatusInternalServerError
+	deadlineTime, ok := ctx.Deadline()
+	if !ok {
+		return false // we never make RPC calls without a deadline set
+	}
+
+	return deadlineTime == fakeDeadlineTime
+}
+
+func (d dlMatcher) String() string {
+	return fmt.Sprintf("deadline is %v", fakeDeadlineTime)
+}
+
+func makeAddPrechainRequest(t *testing.T, li *logInfo, body io.Reader) *httptest.ResponseRecorder {
+	t.Helper()
+	handler := AppHandler{Info: li, Handler: addPreChain, Name: "AddPreChain", Method: http.MethodPost}
+	return makeAddChainRequestInternal(t, handler, "add-pre-chain", body)
+}
+
+func makeAddChainRequest(t *testing.T, li *logInfo, body io.Reader) *httptest.ResponseRecorder {
+	t.Helper()
+	handler := AppHandler{Info: li, Handler: addChain, Name: "AddChain", Method: http.MethodPost}
+	return makeAddChainRequestInternal(t, handler, "add-chain", body)
+}
+
+func makeAddChainRequestInternal(t *testing.T, handler AppHandler, path string, body io.Reader) *httptest.ResponseRecorder {
+	t.Helper()
+	req, err := http.NewRequest("POST", fmt.Sprintf("http://example.com/ct/v1/%s", path), body)
+	if err != nil {
+		t.Fatalf("Failed to create POST request: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	return w
+}
+
+func makeGetRootResponseForTest(t *testing.T, stamp, treeSize int64, hash []byte) *trillian.GetLatestSignedLogRootResponse {
+	t.Helper()
+	return &trillian.GetLatestSignedLogRootResponse{
+		SignedLogRoot: mustMarshalRoot(t, &types.LogRootV1{
+			TimestampNanos: uint64(stamp),
+			TreeSize:       uint64(treeSize),
+			RootHash:       hash,
+		}),
 	}
 }
 
-// recordStartPercent works out what percentage of the current log size an index corresponds to,
-// and records this to the getEntriesStartPercentiles histogram.
-func recordStartPercent(leafIndex int64, treeSize uint64, labelVals ...string) {
-	if treeSize > 0 {
-		percent := float64(leafIndex) / float64(treeSize) * 100.0
-		getEntriesStartPercentiles.Observe(percent, labelVals...)
+func loadCertsIntoPoolOrDie(t *testing.T, certs []string) *x509util.PEMCertPool {
+	t.Helper()
+	pool := x509util.NewPEMCertPool()
+	for _, cert := range certs {
+		if !pool.AppendCertsFromPEM([]byte(cert)) {
+			t.Fatalf("couldn't parse test certs: %v", certs)
+		}
 	}
+	return pool
+}
+
+func mustMarshalRoot(t *testing.T, lr *types.LogRootV1) *trillian.SignedLogRoot {
+	t.Helper()
+	rootBytes, err := lr.MarshalBinary()
+	if err != nil {
+		t.Fatalf("Failed to marshal root in test: %v", err)
+	}
+	return &trillian.SignedLogRoot{
+		LogRoot: rootBytes,
+	}
+}
+
+// cmpMatcher is a custom gomock.Matcher that uses cmp.Equal combined with a
+// cmp.Comparer that knows how to properly compare proto.Message types.
+type cmpMatcher struct{ want interface{} }
+
+func (m cmpMatcher) Matches(got interface{}) bool {
+	return cmp.Equal(got, m.want, cmp.Comparer(proto.Equal))
+}
+func (m cmpMatcher) String() string {
+	return fmt.Sprintf("equals %v", m.want)
 }

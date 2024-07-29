@@ -6,7 +6,14 @@ require (
 	cloud.google.com/go/spanner v1.64.0
 	cloud.google.com/go/storage v1.43.0
 	github.com/globocom/go-buffer v1.2.2
+	github.com/golang/mock v1.6.0
+	github.com/google/certificate-transparency-go v1.2.1
 	github.com/google/go-cmp v0.6.0
+	github.com/google/trillian v1.6.0
+	github.com/kylelemons/godebug v1.1.0
+	github.com/prometheus/client_golang v1.19.1
+	github.com/rs/cors v1.11.0
+	github.com/tomasen/realip v0.0.0-20180522021738-f0c99a92ddce
 	github.com/transparency-dev/formats v0.0.0-20240715203801-9ff9b9e3905f
 	github.com/transparency-dev/merkle v0.0.2
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
@@ -27,7 +34,18 @@ require (
 require (
 	cloud.google.com/go v0.115.0 // indirect
 	cloud.google.com/go/auth v0.7.2 // indirect
-	github.com/google/trillian v1.6.0 // indirect
+	cloud.google.com/go/monitoring v1.20.1 // indirect
+	cloud.google.com/go/trace v1.10.9 // indirect
+	contrib.go.opencensus.io/exporter/stackdriver v0.13.14 // indirect
+	github.com/aws/aws-sdk-go v1.46.4 // indirect
+	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
+	github.com/letsencrypt/pkcs11key/v4 v4.0.0 // indirect
+	github.com/miekg/pkcs11 v1.1.1 // indirect
+	github.com/prometheus/client_model v0.5.0 // indirect
+	github.com/prometheus/common v0.48.0 // indirect
+	github.com/prometheus/procfs v0.12.0 // indirect
+	github.com/prometheus/prometheus v0.47.2 // indirect
 )
 
 require (
@@ -66,5 +84,5 @@ require (
 	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	google.golang.org/genproto v0.0.0-20240722135656-d784300faade // indirect
-	google.golang.org/protobuf v1.34.2 // indirect
+	google.golang.org/protobuf v1.34.2
 )
