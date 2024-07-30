@@ -108,6 +108,7 @@ func MultiLogConfigFromFile(filename string) (*configpb.LogMultiConfig, error) {
 //   - Frozen STH (if present) is correct and signed by the provided public key.
 //
 // Returns the validated structures (useful to avoid double validation).
+// TODO(phboneff): return an error if there is no backend config
 func ValidateLogConfig(cfg *configpb.LogConfig) (*ValidatedLogConfig, error) {
 	if cfg.LogId == 0 {
 		return nil, errors.New("empty log ID")
@@ -256,6 +257,30 @@ func validateConfigs(cfg []*configpb.LogConfig) error {
 			return fmt.Errorf("log config: duplicate prefix: %s: %v", logCfg.SubmissionPrefix, logCfg)
 		}
 		logOriginMap[logCfg.SubmissionPrefix] = true
+	}
+
+	return nil
+}
+
+// ValidateLogConfigs checks that a config is valid for use with a single log
+// server. The rules applied are:
+//
+// 1. All log configs must be valid (see ValidateLogConfig).
+// 2. The prefixes of configured logs must all be distinct and must not be
+// empty.
+// 3. The set of tree IDs must be distinct.
+func ValidateLogConfigs(cfg []*configpb.LogConfig) error {
+	if err := validateConfigs(cfg); err != nil {
+		return err
+	}
+
+	// Check that logs have no duplicate Origins.
+	treeIDs := make(map[string]bool)
+	for _, logCfg := range cfg {
+		if treeIDs[logCfg.SubmissionPrefix] {
+			return fmt.Errorf("log config: dup submission prefix: %s for: %v", logCfg.SubmissionPrefix, logCfg)
+		}
+		treeIDs[logCfg.SubmissionPrefix] = true
 	}
 
 	return nil
