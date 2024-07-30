@@ -77,6 +77,11 @@ func TestValidateLogConfig(t *testing.T) {
 		wantErr string
 	}{
 		{
+			desc:    "empty-submission-prefix",
+			wantErr: "empty log SubmissionPrefix",
+			cfg:     &configpb.LogConfig{},
+		},
+		{
 			desc:    "empty-private-key",
 			wantErr: "empty private key",
 			cfg:     &configpb.LogConfig{SubmissionPrefix: "testlog"},
@@ -90,6 +95,14 @@ func TestValidateLogConfig(t *testing.T) {
 			},
 		},
 		{
+			desc:    "empty-storage-config",
+			wantErr: "empty storage config",
+			cfg: &configpb.LogConfig{
+				SubmissionPrefix: "testlog",
+				PrivateKey:       privKey,
+			},
+		},
+		{
 			desc:    "rejecting-all",
 			wantErr: "rejecting all certificates",
 			cfg: &configpb.LogConfig{
@@ -97,6 +110,9 @@ func TestValidateLogConfig(t *testing.T) {
 				RejectExpired:    true,
 				RejectUnexpired:  true,
 				PrivateKey:       privKey,
+				StorageConfig: &configpb.StorageConfig{
+					Config: &configpb.StorageConfig_Gcp{Gcp: &configpb.GCPConfig{Bucket: "bucket", SpannerDbPath: "spanner"}},
+				},
 			},
 		},
 		{
@@ -106,6 +122,9 @@ func TestValidateLogConfig(t *testing.T) {
 				SubmissionPrefix: "testlog",
 				PrivateKey:       privKey,
 				ExtKeyUsages:     []string{"wrong_usage"},
+				StorageConfig: &configpb.StorageConfig{
+					Config: &configpb.StorageConfig_Gcp{Gcp: &configpb.GCPConfig{Bucket: "bucket", SpannerDbPath: "spanner"}},
+				},
 			},
 		},
 		{
@@ -115,6 +134,9 @@ func TestValidateLogConfig(t *testing.T) {
 				SubmissionPrefix: "testlog",
 				PrivateKey:       privKey,
 				ExtKeyUsages:     []string{"ClientAuth", "ServerAuth", "TimeStomping"},
+				StorageConfig: &configpb.StorageConfig{
+					Config: &configpb.StorageConfig_Gcp{Gcp: &configpb.GCPConfig{Bucket: "bucket", SpannerDbPath: "spanner"}},
+				},
 			},
 		},
 		{
@@ -124,6 +146,9 @@ func TestValidateLogConfig(t *testing.T) {
 				SubmissionPrefix: "testlog",
 				PrivateKey:       privKey,
 				ExtKeyUsages:     []string{"Any "},
+				StorageConfig: &configpb.StorageConfig{
+					Config: &configpb.StorageConfig_Gcp{Gcp: &configpb.GCPConfig{Bucket: "bucket", SpannerDbPath: "spanner"}},
+				},
 			},
 		},
 		{
@@ -133,6 +158,9 @@ func TestValidateLogConfig(t *testing.T) {
 				SubmissionPrefix: "testlog",
 				PrivateKey:       privKey,
 				NotAfterStart:    invalidTimestamp,
+				StorageConfig: &configpb.StorageConfig{
+					Config: &configpb.StorageConfig_Gcp{Gcp: &configpb.GCPConfig{Bucket: "bucket", SpannerDbPath: "spanner"}},
+				},
 			},
 		},
 		{
@@ -142,6 +170,9 @@ func TestValidateLogConfig(t *testing.T) {
 				SubmissionPrefix: "testlog",
 				PrivateKey:       privKey,
 				NotAfterLimit:    invalidTimestamp,
+				StorageConfig: &configpb.StorageConfig{
+					Config: &configpb.StorageConfig_Gcp{Gcp: &configpb.GCPConfig{Bucket: "bucket", SpannerDbPath: "spanner"}},
+				},
 			},
 		},
 		{
@@ -152,6 +183,9 @@ func TestValidateLogConfig(t *testing.T) {
 				PrivateKey:       privKey,
 				NotAfterStart:    &timestamppb.Timestamp{Seconds: 200},
 				NotAfterLimit:    &timestamppb.Timestamp{Seconds: 100},
+				StorageConfig: &configpb.StorageConfig{
+					Config: &configpb.StorageConfig_Gcp{Gcp: &configpb.GCPConfig{Bucket: "bucket", SpannerDbPath: "spanner"}},
+				},
 			},
 		},
 		{
@@ -161,6 +195,9 @@ func TestValidateLogConfig(t *testing.T) {
 				SubmissionPrefix: "testlog",
 				PrivateKey:       privKey,
 				MaxMergeDelaySec: -100,
+				StorageConfig: &configpb.StorageConfig{
+					Config: &configpb.StorageConfig_Gcp{Gcp: &configpb.GCPConfig{Bucket: "bucket", SpannerDbPath: "spanner"}},
+				},
 			},
 		},
 		{
@@ -170,6 +207,9 @@ func TestValidateLogConfig(t *testing.T) {
 				SubmissionPrefix:      "testlog",
 				PrivateKey:            privKey,
 				ExpectedMergeDelaySec: -100,
+				StorageConfig: &configpb.StorageConfig{
+					Config: &configpb.StorageConfig_Gcp{Gcp: &configpb.GCPConfig{Bucket: "bucket", SpannerDbPath: "spanner"}},
+				},
 			},
 		},
 		{
@@ -180,6 +220,9 @@ func TestValidateLogConfig(t *testing.T) {
 				PrivateKey:            privKey,
 				MaxMergeDelaySec:      50,
 				ExpectedMergeDelaySec: 100,
+				StorageConfig: &configpb.StorageConfig{
+					Config: &configpb.StorageConfig_Gcp{Gcp: &configpb.GCPConfig{Bucket: "bucket", SpannerDbPath: "spanner"}},
+				},
 			},
 		},
 		{
@@ -187,6 +230,9 @@ func TestValidateLogConfig(t *testing.T) {
 			cfg: &configpb.LogConfig{
 				SubmissionPrefix: "testlog",
 				PrivateKey:       privKey,
+				StorageConfig: &configpb.StorageConfig{
+					Config: &configpb.StorageConfig_Gcp{Gcp: &configpb.GCPConfig{Bucket: "bucket", SpannerDbPath: "spanner"}},
+				},
 			},
 		},
 		{

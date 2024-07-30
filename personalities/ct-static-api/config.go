@@ -142,6 +142,11 @@ func ValidateLogConfig(cfg *configpb.LogConfig) (*ValidatedLogConfig, error) {
 		return nil, errors.New("unnecessary private key for mirror")
 	}
 
+	// Validate the Backend config:
+	if cfg.StorageConfig == nil {
+		return nil, errors.New("empty storage config")
+	}
+
 	if cfg.RejectExpired && cfg.RejectUnexpired {
 		return nil, errors.New("rejecting all certificates")
 	}
