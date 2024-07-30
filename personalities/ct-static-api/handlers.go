@@ -17,7 +17,6 @@ package ctfe
 import (
 	"context"
 	"crypto"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -966,137 +965,6 @@ func marshalAndWriteAddChainResponse(sct *ct.SignedCertificateTimestamp, signer 
 	return nil
 }
 
-func parseGetEntriesRange(r *http.Request, maxRange, logID int64) (int64, int64, error) {
-	start, err := strconv.ParseInt(r.FormValue(getEntriesParamStart), 10, 64)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	end, err := strconv.ParseInt(r.FormValue(getEntriesParamEnd), 10, 64)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	if start < 0 || end < 0 {
-		return 0, 0, fmt.Errorf("start (%d) and end (%d) parameters must be >= 0", start, end)
-	}
-	if start > end {
-		return 0, 0, fmt.Errorf("start (%d) and end (%d) is not a valid range", start, end)
-	}
-
-	count := end - start + 1
-	if count > maxRange {
-		end = start + maxRange - 1
-	}
-	if *alignGetEntries && count >= maxRange {
-		// Truncate a "maximally sized" get-entries request at the next multiple
-		// of MaxGetEntriesAllowed.
-		// This is intended to coerce large runs of get-entries requests (e.g. by
-		// monitors/mirrors) into all requesting the same start/end ranges,
-		// thereby making the responses more readily cacheable.
-		d := (end + 1) % maxRange
-		end = end - d
-		alignedGetEntries.Inc(strconv.FormatInt(logID, 10), strconv.FormatBool(d == 0))
-	}
-
-	return start, end, nil
-}
-
-func parseGetEntryAndProofParams(r *http.Request) (int64, int64, error) {
-	leafIndex, err := strconv.ParseInt(r.FormValue(getEntryAndProofParamLeafIndex), 10, 64)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	treeSize, err := strconv.ParseInt(r.FormValue(getEntryAndProofParamTreeSize), 10, 64)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	if treeSize <= 0 {
-		return 0, 0, fmt.Errorf("tree_size must be > 0, got: %d", treeSize)
-	}
-	if leafIndex < 0 {
-		return 0, 0, fmt.Errorf("leaf_index must be >= 0, got: %d", treeSize)
-	}
-	if leafIndex >= treeSize {
-		return 0, 0, fmt.Errorf("leaf_index %d out of range for tree of size %d", leafIndex, treeSize)
-	}
-
-	return leafIndex, treeSize, nil
-}
-
-func parseGetSTHConsistencyRange(r *http.Request) (int64, int64, error) {
-	firstVal := r.FormValue(getSTHConsistencyParamFirst)
-	secondVal := r.FormValue(getSTHConsistencyParamSecond)
-	if firstVal == "" {
-		return 0, 0, errors.New("parameter 'first' is required")
-	}
-	if secondVal == "" {
-		return 0, 0, errors.New("parameter 'second' is required")
-	}
-
-	first, err := strconv.ParseInt(firstVal, 10, 64)
-	if err != nil {
-		return 0, 0, errors.New("parameter 'first' is malformed")
-	}
-
-	second, err := strconv.ParseInt(secondVal, 10, 64)
-	if err != nil {
-		return 0, 0, errors.New("parameter 'second' is malformed")
-	}
-
-	if first < 0 || second < 0 {
-		return 0, 0, fmt.Errorf("first and second params cannot be <0: %d %d", first, second)
-	}
-	if second < first {
-		return 0, 0, fmt.Errorf("invalid first, second params: %d %d", first, second)
-	}
-
-	return first, second, nil
-}
-
-// marshalGetEntriesResponse does the conversion from the backend response to the one we need for
-// an RFC compliant JSON response to the client.
-func marshalGetEntriesResponse(li *logInfo, leaves []*trillian.LogLeaf) (ct.GetEntriesResponse, error) {
-	jsonRsp := ct.GetEntriesResponse{}
-
-	for _, leaf := range leaves {
-		// We're only deserializing it to ensure it's valid, don't need the result. We still
-		// return the data if it fails to deserialize as otherwise the root hash could not
-		// be verified. However this indicates a potentially serious failure in log operation
-		// or data storage that should be investigated.
-		var treeLeaf ct.MerkleTreeLeaf
-		if rest, err := tls.Unmarshal(leaf.LeafValue, &treeLeaf); err != nil {
-			klog.Errorf("%s: Failed to deserialize Merkle leaf from backend: %d", li.LogPrefix, leaf.LeafIndex)
-		} else if len(rest) > 0 {
-			klog.Errorf("%s: Trailing data after Merkle leaf from backend: %d", li.LogPrefix, leaf.LeafIndex)
-		}
-
-		extraData := leaf.ExtraData
-		if len(extraData) == 0 {
-			klog.Errorf("%s: Missing ExtraData for leaf %d", li.LogPrefix, leaf.LeafIndex)
-		}
-		jsonRsp.Entries = append(jsonRsp.Entries, ct.LeafEntry{
-			LeafInput: leaf.LeafValue,
-			ExtraData: extraData,
-		})
-	}
-
-	return jsonRsp, nil
-}
-
-// checkAuditPath does a quick scan of the proof we got from the backend for consistency.
-// All the hashes should be non zero length.
-func checkAuditPath(path [][]byte) bool {
-	for _, node := range path {
-		if len(node) != sha256.Size {
-			return false
-		}
-	}
-	return true
-}
-
 func (li *logInfo) toHTTPStatus(err error) int {
 	if li.instanceOpts.ErrorMapper != nil {
 		if status, ok := li.instanceOpts.ErrorMapper(err); ok {
@@ -1132,14 +1000,5 @@ func (li *logInfo) toHTTPStatus(err error) int {
 		return http.StatusServiceUnavailable
 	default:
 		return http.StatusInternalServerError
-	}
-}
-
-// recordStartPercent works out what percentage of the current log size an index corresponds to,
-// and records this to the getEntriesStartPercentiles histogram.
-func recordStartPercent(leafIndex int64, treeSize uint64, labelVals ...string) {
-	if treeSize > 0 {
-		percent := float64(leafIndex) / float64(treeSize) * 100.0
-		getEntriesStartPercentiles.Observe(percent, labelVals...)
 	}
 }
