@@ -9,7 +9,7 @@ require (
 	github.com/google/go-cmp v0.6.0
 	github.com/transparency-dev/formats v0.0.0-20240715203801-9ff9b9e3905f
 	github.com/transparency-dev/merkle v0.0.2
-	golang.org/x/exp v0.0.0-20220827204233-334a2380cb91
+	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
 	golang.org/x/mod v0.19.0
 	google.golang.org/api v0.189.0
 	google.golang.org/grpc v1.65.0
@@ -27,6 +27,7 @@ require (
 require (
 	cloud.google.com/go v0.115.0 // indirect
 	cloud.google.com/go/auth v0.7.2 // indirect
+	github.com/google/trillian v1.6.0 // indirect
 )
 
 require (

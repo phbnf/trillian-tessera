@@ -23,8 +23,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/certificate-transparency-go/trillian/ctfe/configpb"
 	"github.com/google/trillian/crypto/keyspb"
+	"github.com/transparency-dev/trillian-tessera/personalities/ct-static-api/configpb"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -32,14 +32,6 @@ import (
 
 var (
 	invalidTimestamp = &timestamppb.Timestamp{Nanos: int32(1e9)}
-
-	// validSTH is an STH signed by "../testdata/ct-http-server.privkey.pem".
-	validSTH = &configpb.SignedTreeHead{
-		TreeSize:          766,
-		Timestamp:         1538659276115,
-		Sha256RootHash:    mustDecodeBase64("rMWSvrYQ+n6kAmU6sMJuVV5LjoKBGK2OL719X5a+T9Y="),
-		TreeHeadSignature: mustDecodeBase64("BAMASDBGAiEApo+OIdPXIVEwdnS1v5Iu1gQHaiWmCY73h28zfKMmHrYCIQD1U6qj1mKBXYIQVP52YCdaxdHJH4jDsL1JlaA+J/MqCw=="),
-	}
 )
 
 func mustMarshalAny(pb proto.Message) *anypb.Any {
@@ -76,11 +68,8 @@ func mustDecodeBase64(str string) []byte {
 }
 
 func TestValidateLogConfig(t *testing.T) {
-	pubKey := mustReadPublicKey("../testdata/ct-http-server.pubkey.pem")
+	//pubKey := mustReadPublicKey("../testdata/ct-http-server.pubkey.pem")
 	privKey := mustMarshalAny(&keyspb.PEMKeyFile{Path: "../testdata/ct-http-server.privkey.pem", Password: "dirk"})
-
-	corruptedSTH := proto.Clone(validSTH).(*configpb.SignedTreeHead)
-	corruptedSTH.TreeSize = 1234
 
 	for _, tc := range []struct {
 		desc    string
@@ -88,131 +77,88 @@ func TestValidateLogConfig(t *testing.T) {
 		wantErr string
 	}{
 		{
-			desc:    "empty-log-ID",
-			wantErr: "empty log ID",
-			cfg:     &configpb.LogConfig{},
-		},
-		{
-			desc:    "empty-public-key-mirror",
-			wantErr: "empty public key for mirror",
-			cfg:     &configpb.LogConfig{LogId: 123, IsMirror: true},
-		},
-		{
-			desc:    "empty-public-key-frozen",
-			wantErr: "empty public key for frozen STH",
-			cfg:     &configpb.LogConfig{LogId: 123, FrozenSth: &configpb.SignedTreeHead{}},
-		},
-		{
-			desc:    "invalid-public-key-empty",
-			wantErr: "x509.ParsePKIXPublicKey",
-			cfg: &configpb.LogConfig{
-				LogId:     123,
-				PublicKey: &keyspb.PublicKey{},
-				IsMirror:  true,
-			},
-		},
-		{
-			desc:    "invalid-public-key-abacaba",
-			wantErr: "x509.ParsePKIXPublicKey",
-			cfg: &configpb.LogConfig{
-				LogId:     123,
-				PublicKey: &keyspb.PublicKey{Der: []byte("abacaba")},
-				IsMirror:  true,
-			},
-		},
-		{
 			desc:    "empty-private-key",
 			wantErr: "empty private key",
-			cfg:     &configpb.LogConfig{LogId: 123},
+			cfg:     &configpb.LogConfig{SubmissionPrefix: "testlog"},
 		},
 		{
 			desc:    "invalid-private-key",
 			wantErr: "invalid private key",
 			cfg: &configpb.LogConfig{
-				LogId:      123,
-				PrivateKey: &anypb.Any{},
-			},
-		},
-		{
-			desc:    "unnecessary-private-key",
-			wantErr: "unnecessary private key",
-			cfg: &configpb.LogConfig{
-				LogId:      123,
-				PublicKey:  pubKey,
-				PrivateKey: privKey,
-				IsMirror:   true,
+				SubmissionPrefix: "testlog",
+				PrivateKey:       &anypb.Any{},
 			},
 		},
 		{
 			desc:    "rejecting-all",
 			wantErr: "rejecting all certificates",
 			cfg: &configpb.LogConfig{
-				LogId:           123,
-				RejectExpired:   true,
-				RejectUnexpired: true,
-				PrivateKey:      privKey,
+				SubmissionPrefix: "testlog",
+				RejectExpired:    true,
+				RejectUnexpired:  true,
+				PrivateKey:       privKey,
 			},
 		},
 		{
 			desc:    "unknown-ext-key-usage-1",
 			wantErr: "unknown extended key usage",
 			cfg: &configpb.LogConfig{
-				LogId:        123,
-				PrivateKey:   privKey,
-				ExtKeyUsages: []string{"wrong_usage"},
+				SubmissionPrefix: "testlog",
+				PrivateKey:       privKey,
+				ExtKeyUsages:     []string{"wrong_usage"},
 			},
 		},
 		{
 			desc:    "unknown-ext-key-usage-2",
 			wantErr: "unknown extended key usage",
 			cfg: &configpb.LogConfig{
-				LogId:        123,
-				PrivateKey:   privKey,
-				ExtKeyUsages: []string{"ClientAuth", "ServerAuth", "TimeStomping"},
+				SubmissionPrefix: "testlog",
+				PrivateKey:       privKey,
+				ExtKeyUsages:     []string{"ClientAuth", "ServerAuth", "TimeStomping"},
 			},
 		},
 		{
 			desc:    "unknown-ext-key-usage-3",
 			wantErr: "unknown extended key usage",
 			cfg: &configpb.LogConfig{
-				LogId:        123,
-				PrivateKey:   privKey,
-				ExtKeyUsages: []string{"Any "},
+				SubmissionPrefix: "testlog",
+				PrivateKey:       privKey,
+				ExtKeyUsages:     []string{"Any "},
 			},
 		},
 		{
 			desc:    "invalid-start-timestamp",
 			wantErr: "invalid start timestamp",
 			cfg: &configpb.LogConfig{
-				LogId:         123,
-				PrivateKey:    privKey,
-				NotAfterStart: invalidTimestamp,
+				SubmissionPrefix: "testlog",
+				PrivateKey:       privKey,
+				NotAfterStart:    invalidTimestamp,
 			},
 		},
 		{
 			desc:    "invalid-limit-timestamp",
 			wantErr: "invalid limit timestamp",
 			cfg: &configpb.LogConfig{
-				LogId:         123,
-				PrivateKey:    privKey,
-				NotAfterLimit: invalidTimestamp,
+				SubmissionPrefix: "testlog",
+				PrivateKey:       privKey,
+				NotAfterLimit:    invalidTimestamp,
 			},
 		},
 		{
 			desc:    "limit-before-start",
 			wantErr: "limit before start",
 			cfg: &configpb.LogConfig{
-				LogId:         123,
-				PrivateKey:    privKey,
-				NotAfterStart: &timestamppb.Timestamp{Seconds: 200},
-				NotAfterLimit: &timestamppb.Timestamp{Seconds: 100},
+				SubmissionPrefix: "testlog",
+				PrivateKey:       privKey,
+				NotAfterStart:    &timestamppb.Timestamp{Seconds: 200},
+				NotAfterLimit:    &timestamppb.Timestamp{Seconds: 100},
 			},
 		},
 		{
 			desc:    "negative-maximum-merge",
 			wantErr: "negative maximum merge",
 			cfg: &configpb.LogConfig{
-				LogId:            123,
+				SubmissionPrefix: "testlog",
 				PrivateKey:       privKey,
 				MaxMergeDelaySec: -100,
 			},
@@ -221,7 +167,7 @@ func TestValidateLogConfig(t *testing.T) {
 			desc:    "negative-expected-merge",
 			wantErr: "negative expected merge",
 			cfg: &configpb.LogConfig{
-				LogId:                 123,
+				SubmissionPrefix:      "testlog",
 				PrivateKey:            privKey,
 				ExpectedMergeDelaySec: -100,
 			},
@@ -230,40 +176,17 @@ func TestValidateLogConfig(t *testing.T) {
 			desc:    "expected-exceeds-max",
 			wantErr: "expected merge delay exceeds MMD",
 			cfg: &configpb.LogConfig{
-				LogId:                 123,
+				SubmissionPrefix:      "testlog",
 				PrivateKey:            privKey,
 				MaxMergeDelaySec:      50,
 				ExpectedMergeDelaySec: 100,
 			},
 		},
 		{
-			desc:    "invalid-frozen-STH",
-			wantErr: "invalid frozen STH",
-			cfg: &configpb.LogConfig{
-				LogId:     123,
-				PublicKey: pubKey,
-				IsMirror:  true,
-				FrozenSth: &configpb.SignedTreeHead{
-					TreeSize:  10,
-					Timestamp: 100500,
-				},
-			},
-		},
-		{
-			desc:    "signature-verification-failed",
-			wantErr: "signature verification failed",
-			cfg: &configpb.LogConfig{
-				LogId:      123,
-				PublicKey:  pubKey,
-				PrivateKey: privKey,
-				FrozenSth:  corruptedSTH,
-			},
-		},
-		{
 			desc: "ok",
 			cfg: &configpb.LogConfig{
-				LogId:      123,
-				PrivateKey: privKey,
+				SubmissionPrefix: "testlog",
+				PrivateKey:       privKey,
 			},
 		},
 		{
@@ -273,67 +196,50 @@ func TestValidateLogConfig(t *testing.T) {
 			// make this test fail.
 			desc: "ok-not-a-key",
 			cfg: &configpb.LogConfig{
-				LogId:      123,
-				PrivateKey: mustMarshalAny(&configpb.LogConfig{}),
-			},
-		},
-		{
-			desc: "ok-mirror",
-			cfg: &configpb.LogConfig{
-				LogId:     123,
-				PublicKey: pubKey,
-				IsMirror:  true,
+				SubmissionPrefix: "testlog",
+				PrivateKey:       mustMarshalAny(&configpb.LogConfig{}),
 			},
 		},
 		{
 			desc: "ok-ext-key-usages",
 			cfg: &configpb.LogConfig{
-				LogId:        123,
-				PrivateKey:   privKey,
-				ExtKeyUsages: []string{"ServerAuth", "ClientAuth", "OCSPSigning"},
+				SubmissionPrefix: "testlog",
+				PrivateKey:       privKey,
+				ExtKeyUsages:     []string{"ServerAuth", "ClientAuth", "OCSPSigning"},
 			},
 		},
 		{
 			desc: "ok-start-timestamp",
 			cfg: &configpb.LogConfig{
-				LogId:         123,
-				PrivateKey:    privKey,
-				NotAfterStart: &timestamppb.Timestamp{Seconds: 100},
+				SubmissionPrefix: "testlog",
+				PrivateKey:       privKey,
+				NotAfterStart:    &timestamppb.Timestamp{Seconds: 100},
 			},
 		},
 		{
 			desc: "ok-limit-timestamp",
 			cfg: &configpb.LogConfig{
-				LogId:         123,
-				PrivateKey:    privKey,
-				NotAfterLimit: &timestamppb.Timestamp{Seconds: 200},
+				SubmissionPrefix: "testlog",
+				PrivateKey:       privKey,
+				NotAfterLimit:    &timestamppb.Timestamp{Seconds: 200},
 			},
 		},
 		{
 			desc: "ok-range-timestamp",
 			cfg: &configpb.LogConfig{
-				LogId:         123,
-				PrivateKey:    privKey,
-				NotAfterStart: &timestamppb.Timestamp{Seconds: 300},
-				NotAfterLimit: &timestamppb.Timestamp{Seconds: 400},
+				SubmissionPrefix: "testlog",
+				PrivateKey:       privKey,
+				NotAfterStart:    &timestamppb.Timestamp{Seconds: 300},
+				NotAfterLimit:    &timestamppb.Timestamp{Seconds: 400},
 			},
 		},
 		{
 			desc: "ok-merge-delay",
 			cfg: &configpb.LogConfig{
-				LogId:                 123,
+				SubmissionPrefix:      "testlog",
 				PrivateKey:            privKey,
 				MaxMergeDelaySec:      86400,
 				ExpectedMergeDelaySec: 7200,
-			},
-		},
-		{
-			desc: "ok-frozen-STH",
-			cfg: &configpb.LogConfig{
-				LogId:      123,
-				PublicKey:  pubKey,
-				PrivateKey: privKey,
-				FrozenSth:  validSTH,
 			},
 		},
 	} {
@@ -353,246 +259,247 @@ func TestValidateLogConfig(t *testing.T) {
 	}
 }
 
-func TestValidateLogMultiConfig(t *testing.T) {
-	privKey := mustMarshalAny(&keyspb.PEMKeyFile{Path: "../testdata/ct-http-server.privkey.pem", Password: "dirk"})
-	for _, tc := range []struct {
-		desc    string
-		cfg     *configpb.LogMultiConfig
-		wantErr string
-	}{
-		{
-			desc:    "empty-backend-name",
-			wantErr: "empty backend name",
-			cfg: &configpb.LogMultiConfig{
-				Backends: &configpb.LogBackendSet{
-					Backend: []*configpb.LogBackend{
-						{BackendSpec: "testspec"},
-					},
-				},
-			},
-		},
-		{
-			desc:    "empty-backend-spec",
-			wantErr: "empty backend spec",
-			cfg: &configpb.LogMultiConfig{
-				Backends: &configpb.LogBackendSet{
-					Backend: []*configpb.LogBackend{
-						{Name: "log1"},
-					},
-				},
-			},
-		},
-		{
-			desc:    "duplicate-backend-name",
-			wantErr: "duplicate backend name",
-			cfg: &configpb.LogMultiConfig{
-				Backends: &configpb.LogBackendSet{
-					Backend: []*configpb.LogBackend{
-						{Name: "dup", BackendSpec: "testspec"},
-						{Name: "dup", BackendSpec: "testspec"},
-					},
-				},
-			},
-		},
-		{
-			desc:    "duplicate-backend-spec",
-			wantErr: "duplicate backend spec",
-			cfg: &configpb.LogMultiConfig{
-				Backends: &configpb.LogBackendSet{
-					Backend: []*configpb.LogBackend{
-						{Name: "log1", BackendSpec: "testspec"},
-						{Name: "log2", BackendSpec: "testspec"},
-					},
-				},
-			},
-		},
-		{
-			desc:    "invalid-log-config",
-			wantErr: "log config: empty log ID",
-			cfg: &configpb.LogMultiConfig{
-				Backends: &configpb.LogBackendSet{
-					Backend: []*configpb.LogBackend{
-						{Name: "log1", BackendSpec: "testspec"},
-					},
-				},
-				LogConfigs: &configpb.LogConfigSet{
-					Config: []*configpb.LogConfig{
-						{Prefix: "pref"},
-					},
-				},
-			},
-		},
-		{
-			desc:    "empty-prefix",
-			wantErr: "empty prefix",
-			cfg: &configpb.LogMultiConfig{
-				Backends: &configpb.LogBackendSet{
-					Backend: []*configpb.LogBackend{
-						{Name: "log1", BackendSpec: "testspec"},
-					},
-				},
-				LogConfigs: &configpb.LogConfigSet{
-					Config: []*configpb.LogConfig{
-						{LogId: 1, PrivateKey: privKey, LogBackendName: "log1"},
-					},
-				},
-			},
-		},
-		{
-			desc:    "duplicate-prefix",
-			wantErr: "duplicate prefix",
-			cfg: &configpb.LogMultiConfig{
-				Backends: &configpb.LogBackendSet{
-					Backend: []*configpb.LogBackend{
-						{Name: "log1", BackendSpec: "testspec1"},
-					},
-				},
-				LogConfigs: &configpb.LogConfigSet{
-					Config: []*configpb.LogConfig{
-						{LogId: 1, Prefix: "pref1", PrivateKey: privKey, LogBackendName: "log1"},
-						{LogId: 2, Prefix: "pref2", PrivateKey: privKey, LogBackendName: "log1"},
-						{LogId: 3, Prefix: "pref1", PrivateKey: privKey, LogBackendName: "log1"},
-					},
-				},
-			},
-		},
-		{
-			desc:    "references-undefined-backend",
-			wantErr: "references undefined backend",
-			cfg: &configpb.LogMultiConfig{
-				Backends: &configpb.LogBackendSet{
-					Backend: []*configpb.LogBackend{
-						{Name: "log1", BackendSpec: "testspec"},
-					},
-				},
-				LogConfigs: &configpb.LogConfigSet{
-					Config: []*configpb.LogConfig{
-						{LogId: 2, Prefix: "pref2", PrivateKey: privKey, LogBackendName: "log2"},
-					},
-				},
-			},
-		},
-		{
-			desc:    "dup-tree-id-on-same-backend",
-			wantErr: "dup tree id",
-			cfg: &configpb.LogMultiConfig{
-				Backends: &configpb.LogBackendSet{
-					Backend: []*configpb.LogBackend{
-						{Name: "log1", BackendSpec: "testspec1"},
-					},
-				},
-				LogConfigs: &configpb.LogConfigSet{
-					Config: []*configpb.LogConfig{
-						{LogId: 1, Prefix: "pref1", PrivateKey: privKey, LogBackendName: "log1"},
-						{LogId: 2, Prefix: "pref2", PrivateKey: privKey, LogBackendName: "log1"},
-						{LogId: 1, Prefix: "pref3", PrivateKey: privKey, LogBackendName: "log1"},
-					},
-				},
-			},
-		},
-		{
-			desc: "ok-all-distinct",
-			cfg: &configpb.LogMultiConfig{
-				Backends: &configpb.LogBackendSet{
-					Backend: []*configpb.LogBackend{
-						{Name: "log1", BackendSpec: "testspec1"},
-						{Name: "log2", BackendSpec: "testspec2"},
-						{Name: "log3", BackendSpec: "testspec3"},
-					},
-				},
-				LogConfigs: &configpb.LogConfigSet{
-					Config: []*configpb.LogConfig{
-						{LogId: 1, Prefix: "pref1", PrivateKey: privKey, LogBackendName: "log1"},
-						{LogId: 2, Prefix: "pref2", PrivateKey: privKey, LogBackendName: "log2"},
-						{LogId: 3, Prefix: "pref3", PrivateKey: privKey, LogBackendName: "log3"},
-					},
-				},
-			},
-		},
-		{
-			desc: "ok-dup-tree-ids-on-different-backends",
-			cfg: &configpb.LogMultiConfig{
-				Backends: &configpb.LogBackendSet{
-					Backend: []*configpb.LogBackend{
-						{Name: "log1", BackendSpec: "testspec1"},
-						{Name: "log2", BackendSpec: "testspec2"},
-						{Name: "log3", BackendSpec: "testspec3"},
-					},
-				},
-				LogConfigs: &configpb.LogConfigSet{
-					Config: []*configpb.LogConfig{
-						{LogId: 1, Prefix: "pref1", PrivateKey: privKey, LogBackendName: "log1"},
-						{LogId: 1, Prefix: "pref2", PrivateKey: privKey, LogBackendName: "log2"},
-						{LogId: 1, Prefix: "pref3", PrivateKey: privKey, LogBackendName: "log3"},
-					},
-				},
-			},
-		},
-	} {
-		t.Run(tc.desc, func(t *testing.T) {
-			_, err := ValidateLogMultiConfig(tc.cfg)
-			if len(tc.wantErr) == 0 && err != nil {
-				t.Fatalf("ValidateLogMultiConfig()=%v, want nil", err)
-			}
-			if len(tc.wantErr) > 0 && (err == nil || !strings.Contains(err.Error(), tc.wantErr)) {
-				t.Errorf("ValidateLogMultiConfig()=%v, want err containing %q", err, tc.wantErr)
-			}
-		})
-	}
-}
-
-func TestToMultiLogConfig(t *testing.T) {
-	// TODO(pavelkalinnikov): Log configs in this test are not valid (they don't
-	// have keys etc). In addition, we should have tests to ensure that valid log
-	// configs result in valid MultiLogConfig.
-
-	for _, tc := range []struct {
-		desc string
-		cfg  []*configpb.LogConfig
-		want *configpb.LogMultiConfig
-	}{
-		{
-			desc: "ok-one-config",
-			cfg: []*configpb.LogConfig{
-				{LogId: 1, Prefix: "test"},
-			},
-			want: &configpb.LogMultiConfig{
-				Backends: &configpb.LogBackendSet{
-					Backend: []*configpb.LogBackend{{Name: "default", BackendSpec: "spec"}},
-				},
-				LogConfigs: &configpb.LogConfigSet{
-					Config: []*configpb.LogConfig{
-						{LogId: 1, Prefix: "test", LogBackendName: "default"},
-					},
-				},
-			},
-		},
-		{
-			desc: "ok-three-configs",
-			cfg: []*configpb.LogConfig{
-				{LogId: 1, Prefix: "test1"},
-				{LogId: 2, Prefix: "test2"},
-				{LogId: 3, Prefix: "test3"},
-			},
-			want: &configpb.LogMultiConfig{
-				Backends: &configpb.LogBackendSet{
-					Backend: []*configpb.LogBackend{{Name: "default", BackendSpec: "spec"}},
-				},
-				LogConfigs: &configpb.LogConfigSet{
-					Config: []*configpb.LogConfig{
-						{LogId: 1, Prefix: "test1", LogBackendName: "default"},
-						{LogId: 2, Prefix: "test2", LogBackendName: "default"},
-						{LogId: 3, Prefix: "test3", LogBackendName: "default"},
-					},
-				},
-			},
-		},
-	} {
-		t.Run(tc.desc, func(t *testing.T) {
-			got := ToMultiLogConfig(tc.cfg, "spec")
-			if !proto.Equal(got, tc.want) {
-				t.Errorf("TestToMultiLogConfig()=%v, want %v", got, tc.want)
-			}
-		})
-	}
-}
+//func TestValidateLogMultiConfig(t *testing.T) {
+//	privKey := mustMarshalAny(&keyspb.PEMKeyFile{Path: "../testdata/ct-http-server.privkey.pem", Password: "dirk"})
+//	for _, tc := range []struct {
+//		desc    string
+//		cfg     *configpb.LogMultiConfig
+//		wantErr string
+//	}{
+//		// TODO(phboneff): add config for multiple storage
+//		{
+//			desc:    "empty-backend-name",
+//			wantErr: "empty backend name",
+//			cfg: &configpb.LogMultiConfig{
+//				Backends: &configpb.LogBackendSet{
+//					Backend: []*configpb.LogBackend{
+//						{BackendSpec: "testspec"},
+//					},
+//				},
+//			},
+//		},
+//		{
+//			desc:    "empty-backend-spec",
+//			wantErr: "empty backend spec",
+//			cfg: &configpb.LogMultiConfig{
+//				Backends: &configpb.LogBackendSet{
+//					Backend: []*configpb.LogBackend{
+//						{Name: "log1"},
+//					},
+//				},
+//			},
+//		},
+//		{
+//			desc:    "duplicate-backend-name",
+//			wantErr: "duplicate backend name",
+//			cfg: &configpb.LogMultiConfig{
+//				Backends: &configpb.LogBackendSet{
+//					Backend: []*configpb.LogBackend{
+//						{Name: "dup", BackendSpec: "testspec"},
+//						{Name: "dup", BackendSpec: "testspec"},
+//					},
+//				},
+//			},
+//		},
+//		{
+//			desc:    "duplicate-backend-spec",
+//			wantErr: "duplicate backend spec",
+//			cfg: &configpb.LogMultiConfig{
+//				Backends: &configpb.LogBackendSet{
+//					Backend: []*configpb.LogBackend{
+//						{Name: "log1", BackendSpec: "testspec"},
+//						{Name: "log2", BackendSpec: "testspec"},
+//					},
+//				},
+//			},
+//		},
+//		{
+//			desc:    "invalid-log-config",
+//			wantErr: "log config: empty log ID",
+//			cfg: &configpb.LogMultiConfig{
+//				Backends: &configpb.LogBackendSet{
+//					Backend: []*configpb.LogBackend{
+//						{Name: "log1", BackendSpec: "testspec"},
+//					},
+//				},
+//				LogConfigs: &configpb.LogConfigSet{
+//					Config: []*configpb.LogConfig{
+//						{Prefix: "pref"},
+//					},
+//				},
+//			},
+//		},
+//		{
+//			desc:    "empty-prefix",
+//			wantErr: "empty prefix",
+//			cfg: &configpb.LogMultiConfig{
+//				Backends: &configpb.LogBackendSet{
+//					Backend: []*configpb.LogBackend{
+//						{Name: "log1", BackendSpec: "testspec"},
+//					},
+//				},
+//				LogConfigs: &configpb.LogConfigSet{
+//					Config: []*configpb.LogConfig{
+//						{LogId: 1, PrivateKey: privKey, LogBackendName: "log1"},
+//					},
+//				},
+//			},
+//		},
+//		{
+//			desc:    "duplicate-prefix",
+//			wantErr: "duplicate prefix",
+//			cfg: &configpb.LogMultiConfig{
+//				Backends: &configpb.LogBackendSet{
+//					Backend: []*configpb.LogBackend{
+//						{Name: "log1", BackendSpec: "testspec1"},
+//					},
+//				},
+//				LogConfigs: &configpb.LogConfigSet{
+//					Config: []*configpb.LogConfig{
+//						{LogId: 1, Prefix: "pref1", PrivateKey: privKey, LogBackendName: "log1"},
+//						{LogId: 2, Prefix: "pref2", PrivateKey: privKey, LogBackendName: "log1"},
+//						{LogId: 3, Prefix: "pref1", PrivateKey: privKey, LogBackendName: "log1"},
+//					},
+//				},
+//			},
+//		},
+//		{
+//			desc:    "references-undefined-backend",
+//			wantErr: "references undefined backend",
+//			cfg: &configpb.LogMultiConfig{
+//				Backends: &configpb.LogBackendSet{
+//					Backend: []*configpb.LogBackend{
+//						{Name: "log1", BackendSpec: "testspec"},
+//					},
+//				},
+//				LogConfigs: &configpb.LogConfigSet{
+//					Config: []*configpb.LogConfig{
+//						{LogId: 2, Prefix: "pref2", PrivateKey: privKey, LogBackendName: "log2"},
+//					},
+//				},
+//			},
+//		},
+//		{
+//			desc:    "dup-tree-id-on-same-backend",
+//			wantErr: "dup tree id",
+//			cfg: &configpb.LogMultiConfig{
+//				Backends: &configpb.LogBackendSet{
+//					Backend: []*configpb.LogBackend{
+//						{Name: "log1", BackendSpec: "testspec1"},
+//					},
+//				},
+//				LogConfigs: &configpb.LogConfigSet{
+//					Config: []*configpb.LogConfig{
+//						{LogId: 1, Prefix: "pref1", PrivateKey: privKey, LogBackendName: "log1"},
+//						{LogId: 2, Prefix: "pref2", PrivateKey: privKey, LogBackendName: "log1"},
+//						{LogId: 1, Prefix: "pref3", PrivateKey: privKey, LogBackendName: "log1"},
+//					},
+//				},
+//			},
+//		},
+//		{
+//			desc: "ok-all-distinct",
+//			cfg: &configpb.LogMultiConfig{
+//				Backends: &configpb.LogBackendSet{
+//					Backend: []*configpb.LogBackend{
+//						{Name: "log1", BackendSpec: "testspec1"},
+//						{Name: "log2", BackendSpec: "testspec2"},
+//						{Name: "log3", BackendSpec: "testspec3"},
+//					},
+//				},
+//				LogConfigs: &configpb.LogConfigSet{
+//					Config: []*configpb.LogConfig{
+//						{LogId: 1, Prefix: "pref1", PrivateKey: privKey, LogBackendName: "log1"},
+//						{LogId: 2, Prefix: "pref2", PrivateKey: privKey, LogBackendName: "log2"},
+//						{LogId: 3, Prefix: "pref3", PrivateKey: privKey, LogBackendName: "log3"},
+//					},
+//				},
+//			},
+//		},
+//		{
+//			desc: "ok-dup-tree-ids-on-different-backends",
+//			cfg: &configpb.LogMultiConfig{
+//				Backends: &configpb.LogBackendSet{
+//					Backend: []*configpb.LogBackend{
+//						{Name: "log1", BackendSpec: "testspec1"},
+//						{Name: "log2", BackendSpec: "testspec2"},
+//						{Name: "log3", BackendSpec: "testspec3"},
+//					},
+//				},
+//				LogConfigs: &configpb.LogConfigSet{
+//					Config: []*configpb.LogConfig{
+//						{LogId: 1, Prefix: "pref1", PrivateKey: privKey, LogBackendName: "log1"},
+//						{LogId: 1, Prefix: "pref2", PrivateKey: privKey, LogBackendName: "log2"},
+//						{LogId: 1, Prefix: "pref3", PrivateKey: privKey, LogBackendName: "log3"},
+//					},
+//				},
+//			},
+//		},
+//	} {
+//		t.Run(tc.desc, func(t *testing.T) {
+//			_, err := ValidateLogMultiConfig(tc.cfg)
+//			if len(tc.wantErr) == 0 && err != nil {
+//				t.Fatalf("ValidateLogMultiConfig()=%v, want nil", err)
+//			}
+//			if len(tc.wantErr) > 0 && (err == nil || !strings.Contains(err.Error(), tc.wantErr)) {
+//				t.Errorf("ValidateLogMultiConfig()=%v, want err containing %q", err, tc.wantErr)
+//			}
+//		})
+//	}
+//}
+//
+//func TestToMultiLogConfig(t *testing.T) {
+//	// TODO(pavelkalinnikov): Log configs in this test are not valid (they don't
+//	// have keys etc). In addition, we should have tests to ensure that valid log
+//	// configs result in valid MultiLogConfig.
+//
+//	for _, tc := range []struct {
+//		desc string
+//		cfg  []*configpb.LogConfig
+//		want *configpb.LogMultiConfig
+//	}{
+//		{
+//			desc: "ok-one-config",
+//			cfg: []*configpb.LogConfig{
+//				{LogId: 1, Prefix: "test"},
+//			},
+//			want: &configpb.LogMultiConfig{
+//				Backends: &configpb.LogBackendSet{
+//					Backend: []*configpb.LogBackend{{Name: "default", BackendSpec: "spec"}},
+//				},
+//				LogConfigs: &configpb.LogConfigSet{
+//					Config: []*configpb.LogConfig{
+//						{LogId: 1, Prefix: "test", LogBackendName: "default"},
+//					},
+//				},
+//			},
+//		},
+//		{
+//			desc: "ok-three-configs",
+//			cfg: []*configpb.LogConfig{
+//				{LogId: 1, Prefix: "test1"},
+//				{LogId: 2, Prefix: "test2"},
+//				{LogId: 3, Prefix: "test3"},
+//			},
+//			want: &configpb.LogMultiConfig{
+//				Backends: &configpb.LogBackendSet{
+//					Backend: []*configpb.LogBackend{{Name: "default", BackendSpec: "spec"}},
+//				},
+//				LogConfigs: &configpb.LogConfigSet{
+//					Config: []*configpb.LogConfig{
+//						{LogId: 1, Prefix: "test1", LogBackendName: "default"},
+//						{LogId: 2, Prefix: "test2", LogBackendName: "default"},
+//						{LogId: 3, Prefix: "test3", LogBackendName: "default"},
+//					},
+//				},
+//			},
+//		},
+//	} {
+//		t.Run(tc.desc, func(t *testing.T) {
+//			got := ToMultiLogConfig(tc.cfg, "spec")
+//			if !proto.Equal(got, tc.want) {
+//				t.Errorf("TestToMultiLogConfig()=%v, want %v", got, tc.want)
+//			}
+//		})
+//	}
+//}

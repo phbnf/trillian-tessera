@@ -244,7 +244,7 @@ func BuildLogBackendMap(lbs *configpb.LogBackendSet) (LogBackendMap, error) {
 func validateConfigs(cfg []*configpb.LogConfig) error {
 	// Check that logs have no duplicate or empty prefixes. Apply other LogConfig
 	// specific checks.
-	logNameMap := make(map[string]bool)
+	logOriginMap := make(map[string]bool)
 	for _, logCfg := range cfg {
 		if _, err := ValidateLogConfig(logCfg); err != nil {
 			return fmt.Errorf("log config: %v: %v", err, logCfg)
@@ -252,10 +252,10 @@ func validateConfigs(cfg []*configpb.LogConfig) error {
 		if len(logCfg.Prefix) == 0 {
 			return fmt.Errorf("log config: empty prefix: %v", logCfg)
 		}
-		if logNameMap[logCfg.Prefix] {
-			return fmt.Errorf("log config: duplicate prefix: %s: %v", logCfg.Prefix, logCfg)
+		if logOriginMap[logCfg.SubmissionPrefix] {
+			return fmt.Errorf("log config: duplicate prefix: %s: %v", logCfg.SubmissionPrefix, logCfg)
 		}
-		logNameMap[logCfg.Prefix] = true
+		logOriginMap[logCfg.SubmissionPrefix] = true
 	}
 
 	return nil
