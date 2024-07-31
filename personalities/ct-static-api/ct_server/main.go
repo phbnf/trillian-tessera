@@ -33,7 +33,6 @@ import (
 	"time"
 
 	"github.com/google/certificate-transparency-go/trillian/ctfe/cache"
-	"github.com/google/trillian"
 	"github.com/google/trillian/crypto/keys"
 	"github.com/google/trillian/crypto/keys/der"
 	"github.com/google/trillian/crypto/keys/pem"
@@ -46,11 +45,6 @@ import (
 	"github.com/tomasen/realip"
 	ctfe "github.com/transparency-dev/trillian-tessera/personalities/ct-static-api"
 	"github.com/transparency-dev/trillian-tessera/personalities/ct-static-api/configpb"
-	clientv3 "go.etcd.io/etcd/client/v3"
-	"go.etcd.io/etcd/client/v3/naming/endpoints"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/protobuf/proto"
 	"k8s.io/klog/v2"
 )
@@ -61,7 +55,6 @@ var (
 	tlsCert            = flag.String("tls_certificate", "", "Path to server TLS certificate")
 	tlsKey             = flag.String("tls_key", "", "Path to server TLS private key")
 	metricsEndpoint    = flag.String("metrics_endpoint", "", "Endpoint for serving metrics; if left empty, metrics will be visible on --http_endpoint")
-	rpcBackend         = flag.String("log_rpc_server", "", "Backend specification; comma-separated list or etcd service name (if --etcd_servers specified). If unset backends are specified in config (as a LogMultiConfig proto)")
 	rpcDeadline        = flag.Duration("rpc_deadline", time.Second*10, "Deadline for backend RPC requests")
 	getSTHInterval     = flag.Duration("get_sth_interval", time.Second*180, "Interval between internal get-sth operations (0 to disable)")
 	logConfig          = flag.String("log_config", "", "File holding log config in text proto format")
@@ -122,85 +115,6 @@ func main() {
 		metricsAt = *httpEndpoint
 	}
 
-	dialOpts := []grpc.DialOption{grpc.WithInsecure()}
-	if len(*etcdServers) > 0 {
-		// Use etcd to provide endpoint resolution.
-		cfg := clientv3.Config{Endpoints: strings.Split(*etcdServers, ","), DialTimeout: 5 * time.Second}
-		client, err := clientv3.New(cfg)
-		if err != nil {
-			klog.Exitf("Failed to connect to etcd at %v: %v", *etcdServers, err)
-		}
-
-		httpManager, err := endpoints.NewManager(client, *etcdHTTPService)
-		if err != nil {
-			klog.Exitf("Failed to create etcd http manager: %v", err)
-		}
-		metricsManager, err := endpoints.NewManager(client, *etcdMetricsService)
-		if err != nil {
-			klog.Exitf("Failed to create etcd metrics manager: %v", err)
-		}
-
-		etcdHTTPKey := fmt.Sprintf("%s/%s", *etcdHTTPService, *httpEndpoint)
-		klog.Infof("Announcing our presence at %v with %+v", etcdHTTPKey, *httpEndpoint)
-		if err := httpManager.AddEndpoint(ctx, etcdHTTPKey, endpoints.Endpoint{Addr: *httpEndpoint}); err != nil {
-			klog.Errorf("AddEndpoint(): %v", err)
-		}
-
-		etcdMetricsKey := fmt.Sprintf("%s/%s", *etcdMetricsService, metricsAt)
-		klog.Infof("Announcing our presence in %v with %+v", *etcdMetricsService, metricsAt)
-		if err := metricsManager.AddEndpoint(ctx, etcdMetricsKey, endpoints.Endpoint{Addr: metricsAt}); err != nil {
-			klog.Errorf("AddEndpoint(): %v", err)
-		}
-
-		defer func() {
-			klog.Infof("Removing our presence in %v", etcdHTTPKey)
-			if err := httpManager.DeleteEndpoint(ctx, etcdHTTPKey); err != nil {
-				klog.Errorf("DeleteEndpoint(): %v", err)
-			}
-			klog.Infof("Removing our presence in %v", etcdMetricsKey)
-			if err := metricsManager.DeleteEndpoint(ctx, etcdMetricsKey); err != nil {
-				klog.Errorf("DeleteEndpoint(): %v", err)
-			}
-		}()
-	} else if strings.Contains(*rpcBackend, ",") {
-		// This should probably not be used in production. Either use etcd or a gRPC
-		// load balancer. It's only used by the integration tests.
-		klog.Warning("Multiple RPC backends from flags not recommended for production. Should probably be using etcd or a gRPC load balancer / proxy.")
-		res := manual.NewBuilderWithScheme("whatever")
-		backends := strings.Split(*rpcBackend, ",")
-		endpoints := make([]resolver.Endpoint, 0, len(backends))
-		for _, backend := range backends {
-			endpoints = append(endpoints, resolver.Endpoint{Addresses: []resolver.Address{{Addr: backend}}})
-		}
-		res.InitialState(resolver.State{Endpoints: endpoints})
-		resolver.SetDefaultScheme(res.Scheme())
-		dialOpts = append(dialOpts, grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`), grpc.WithResolvers(res))
-	} else {
-		klog.Infof("Using regular DNS resolver")
-		dialOpts = append(dialOpts, grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`))
-	}
-
-	// Dial all our log backends.
-	clientMap := make(map[string]trillian.TrillianLogClient)
-	for _, be := range beMap {
-		klog.Infof("Dialling backend: %v", be)
-		if len(beMap) == 1 {
-			// If there's only one of them we use the blocking option as we can't
-			// serve anything until connected.
-			dialOpts = append(dialOpts, grpc.WithBlock())
-		}
-		conn, err := grpc.Dial(be.BackendSpec, dialOpts...)
-		if err != nil {
-			klog.Exitf("Could not dial RPC server: %v: %v", be, err)
-		}
-		defer func() {
-			if err := conn.Close(); err != nil {
-				klog.Errorf("Could not close RPC connection: %v", err)
-			}
-		}()
-		clientMap[be.Name] = trillian.NewTrillianLogClient(conn)
-	}
-
 	// Allow cross-origin requests to all handlers registered on corsMux.
 	// This is safe for CT log handlers because the log is public and
 	// unauthenticated so cross-site scripting attacks are not a concern.
@@ -213,7 +127,6 @@ func main() {
 	var publicKeys []crypto.PublicKey
 	for _, c := range cfgs.Config {
 		inst, err := setupAndRegister(ctx,
-			clientMap[c.LogBackendName],
 			*rpcDeadline,
 			c,
 			corsMux,
@@ -353,7 +266,7 @@ func awaitSignal(doneFn func()) {
 	doneFn()
 }
 
-func setupAndRegister(ctx context.Context, client trillian.TrillianLogClient, deadline time.Duration, cfg *configpb.LogConfig, mux *http.ServeMux, globalHandlerPrefix string, maskInternalErrors bool, cacheType cache.Type, cacheOption cache.Option) (*ctfe.Instance, error) {
+func setupAndRegister(ctx context.Context, deadline time.Duration, cfg *configpb.LogConfig, mux *http.ServeMux, globalHandlerPrefix string, maskInternalErrors bool, cacheType cache.Type, cacheOption cache.Option) (*ctfe.Instance, error) {
 	vCfg, err := ctfe.ValidateLogConfig(cfg)
 	if err != nil {
 		return nil, err
@@ -361,7 +274,6 @@ func setupAndRegister(ctx context.Context, client trillian.TrillianLogClient, de
 
 	opts := ctfe.InstanceOptions{
 		Validated:          vCfg,
-		Client:             client,
 		Deadline:           deadline,
 		MetricFactory:      prometheus.MetricFactory{},
 		RequestLog:         new(ctfe.DefaultRequestLog),
