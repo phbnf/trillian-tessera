@@ -220,16 +220,18 @@ func TestValidateLogConfig(t *testing.T) {
 			// make this test fail.
 			desc: "ok-not-a-key",
 			cfg: &configpb.LogConfig{
-				Origin:     "testlog",
-				PrivateKey: mustMarshalAny(&configpb.LogConfig{}),
+				Origin:        "testlog",
+				PrivateKey:    mustMarshalAny(&configpb.LogConfig{}),
+				StorageConfig: &configpb.LogConfig_Gcp{Gcp: &configpb.GCPConfig{Bucket: "bucket", SpannerDbPath: "spanner"}},
 			},
 		},
 		{
 			desc: "ok-ext-key-usages",
 			cfg: &configpb.LogConfig{
-				Origin:       "testlog",
-				PrivateKey:   privKey,
-				ExtKeyUsages: []string{"ServerAuth", "ClientAuth", "OCSPSigning"},
+				Origin:        "testlog",
+				PrivateKey:    privKey,
+				ExtKeyUsages:  []string{"ServerAuth", "ClientAuth", "OCSPSigning"},
+				StorageConfig: &configpb.LogConfig_Gcp{Gcp: &configpb.GCPConfig{Bucket: "bucket", SpannerDbPath: "spanner"}},
 			},
 		},
 		{
@@ -238,6 +240,7 @@ func TestValidateLogConfig(t *testing.T) {
 				Origin:        "testlog",
 				PrivateKey:    privKey,
 				NotAfterStart: &timestamppb.Timestamp{Seconds: 100},
+				StorageConfig: &configpb.LogConfig_Gcp{Gcp: &configpb.GCPConfig{Bucket: "bucket", SpannerDbPath: "spanner"}},
 			},
 		},
 		{
@@ -246,6 +249,7 @@ func TestValidateLogConfig(t *testing.T) {
 				Origin:        "testlog",
 				PrivateKey:    privKey,
 				NotAfterLimit: &timestamppb.Timestamp{Seconds: 200},
+				StorageConfig: &configpb.LogConfig_Gcp{Gcp: &configpb.GCPConfig{Bucket: "bucket", SpannerDbPath: "spanner"}},
 			},
 		},
 		{
@@ -255,6 +259,7 @@ func TestValidateLogConfig(t *testing.T) {
 				PrivateKey:    privKey,
 				NotAfterStart: &timestamppb.Timestamp{Seconds: 300},
 				NotAfterLimit: &timestamppb.Timestamp{Seconds: 400},
+				StorageConfig: &configpb.LogConfig_Gcp{Gcp: &configpb.GCPConfig{Bucket: "bucket", SpannerDbPath: "spanner"}},
 			},
 		},
 		{
@@ -264,6 +269,7 @@ func TestValidateLogConfig(t *testing.T) {
 				PrivateKey:            privKey,
 				MaxMergeDelaySec:      86400,
 				ExpectedMergeDelaySec: 7200,
+				StorageConfig:         &configpb.LogConfig_Gcp{Gcp: &configpb.GCPConfig{Bucket: "bucket", SpannerDbPath: "spanner"}},
 			},
 		},
 	} {
@@ -284,6 +290,7 @@ func TestValidateLogConfig(t *testing.T) {
 }
 
 func TestValidateLogConfigSet(t *testing.T) {
+	privKey := mustMarshalAny(&keyspb.PEMKeyFile{Path: "../testdata/ct-http-server.privkey.pem", Password: "dirk"})
 	for _, tc := range []struct {
 		desc    string
 		cfg     *configpb.LogConfigSet
@@ -292,16 +299,18 @@ func TestValidateLogConfigSet(t *testing.T) {
 		// TODO(phboneff): add config for multiple storage
 		{
 			desc:    "duplicate-prefix",
-			wantErr: "duplicate prefix",
+			wantErr: "duplicate origin",
 			cfg: &configpb.LogConfigSet{
 				Config: []*configpb.LogConfig{
 					{
 						Origin:        "pref1",
 						StorageConfig: &configpb.LogConfig_Gcp{Gcp: &configpb.GCPConfig{Bucket: "bucket", SpannerDbPath: "spanner"}},
+						PrivateKey:    privKey,
 					},
 					{
 						Origin:        "pref1",
 						StorageConfig: &configpb.LogConfig_Gcp{Gcp: &configpb.GCPConfig{Bucket: "bucket", SpannerDbPath: "spanner"}},
+						PrivateKey:    privKey,
 					},
 				},
 			},
@@ -313,14 +322,17 @@ func TestValidateLogConfigSet(t *testing.T) {
 					{
 						Origin:        "pref1",
 						StorageConfig: &configpb.LogConfig_Gcp{Gcp: &configpb.GCPConfig{Bucket: "bucket", SpannerDbPath: "spanner"}},
+						PrivateKey:    privKey,
 					},
 					{
 						Origin:        "pref2",
 						StorageConfig: &configpb.LogConfig_Gcp{Gcp: &configpb.GCPConfig{Bucket: "bucket", SpannerDbPath: "spanner"}},
+						PrivateKey:    privKey,
 					},
 					{
 						Origin:        "pref3",
 						StorageConfig: &configpb.LogConfig_Gcp{Gcp: &configpb.GCPConfig{Bucket: "bucket", SpannerDbPath: "spanner"}},
+						PrivateKey:    privKey,
 					},
 				},
 			},
