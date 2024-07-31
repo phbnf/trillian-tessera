@@ -61,42 +61,6 @@ func LogConfigFromFile(filename string) ([]*configpb.LogConfig, error) {
 	return cfg.Config, nil
 }
 
-// ToMultiLogConfig creates a multi backend config proto from the data
-// loaded from a single-backend configuration file. All the log configs
-// reference a default backend spec as provided.
-func ToMultiLogConfig(cfg []*configpb.LogConfig, beSpec string) *configpb.LogMultiConfig {
-	defaultBackend := &configpb.LogBackend{Name: "default", BackendSpec: beSpec}
-	for _, c := range cfg {
-		c.LogBackendName = defaultBackend.Name
-	}
-	return &configpb.LogMultiConfig{
-		LogConfigs: &configpb.LogConfigSet{Config: cfg},
-		Backends:   &configpb.LogBackendSet{Backend: []*configpb.LogBackend{defaultBackend}},
-	}
-}
-
-// MultiLogConfigFromFile creates a LogMultiConfig proto from the given
-// filename, which should contain text or binary-encoded protobuf configuration data.
-// Does not do full validation of the config but checks that it is non empty.
-func MultiLogConfigFromFile(filename string) (*configpb.LogMultiConfig, error) {
-	cfgBytes, err := os.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-
-	var cfg configpb.LogMultiConfig
-	if txtErr := prototext.Unmarshal(cfgBytes, &cfg); txtErr != nil {
-		if binErr := proto.Unmarshal(cfgBytes, &cfg); binErr != nil {
-			return nil, fmt.Errorf("failed to parse LogMultiConfig from %q as text protobuf (%v) or binary protobuf (%v)", filename, txtErr, binErr)
-		}
-	}
-
-	if len(cfg.LogConfigs.GetConfig()) == 0 || len(cfg.Backends.GetBackend()) == 0 {
-		return nil, errors.New("config is missing backends and/or log configs")
-	}
-	return &cfg, nil
-}
-
 // ValidateLogConfig checks that a single log config is valid. In particular:
 //   - A mirror log has a valid public key and no private key.
 //   - A non-mirror log has a private, and optionally a public key (both valid).
@@ -193,34 +157,6 @@ func ValidateLogConfig(cfg *configpb.LogConfig) (*ValidatedLogConfig, error) {
 	return &vCfg, nil
 }
 
-// LogBackendMap is a map from log backend names to LogBackend objects.
-type LogBackendMap = map[string]*configpb.LogBackend
-
-// BuildLogBackendMap returns a map from log backend names to the corresponding
-// LogBackend objects. It returns an error unless all backends have unique
-// non-empty names and specifications.
-func BuildLogBackendMap(lbs *configpb.LogBackendSet) (LogBackendMap, error) {
-	lbm := make(LogBackendMap)
-	specs := make(map[string]bool)
-	for _, be := range lbs.Backend {
-		if len(be.Name) == 0 {
-			return nil, fmt.Errorf("empty backend name: %v", be)
-		}
-		if len(be.BackendSpec) == 0 {
-			return nil, fmt.Errorf("empty backend spec: %v", be)
-		}
-		if _, ok := lbm[be.Name]; ok {
-			return nil, fmt.Errorf("duplicate backend name: %v", be)
-		}
-		if ok := specs[be.BackendSpec]; ok {
-			return nil, fmt.Errorf("duplicate backend spec: %v", be)
-		}
-		lbm[be.Name] = be
-		specs[be.BackendSpec] = true
-	}
-	return lbm, nil
-}
-
 func validateConfigs(cfg []*configpb.LogConfig) error {
 	// Check that logs have no duplicate or empty prefixes. Apply other LogConfig
 	// specific checks.
@@ -239,71 +175,6 @@ func validateConfigs(cfg []*configpb.LogConfig) error {
 	}
 
 	return nil
-}
-
-// ValidateLogConfigs checks that a config is valid for use with a single log
-// server. The rules applied are:
-//
-// 1. All log configs must be valid (see ValidateLogConfig).
-// 2. The prefixes of configured logs must all be distinct and must not be
-// empty.
-// 3. The set of tree IDs must be distinct.
-func ValidateLogConfigs(cfg []*configpb.LogConfig) error {
-	if err := validateConfigs(cfg); err != nil {
-		return err
-	}
-
-	// Check that logs have no duplicate tree IDs.
-	treeIDs := make(map[int64]bool)
-	for _, logCfg := range cfg {
-		if treeIDs[logCfg.LogId] {
-			return fmt.Errorf("log config: dup tree id: %d for: %v", logCfg.LogId, logCfg)
-		}
-		treeIDs[logCfg.LogId] = true
-	}
-
-	return nil
-}
-
-// ValidateLogMultiConfig checks that a config is valid for use with multiple
-// backend log servers. The rules applied are the same as ValidateLogConfigs, as
-// well as these additional rules:
-//
-// 1. The backend set must define a set of log backends with distinct
-// (non empty) names and non empty backend specs.
-// 2. The backend specs must all be distinct.
-// 3. The log configs must all specify a log backend and each must be one of
-// those defined in the backend set.
-//
-// Also, another difference is that the tree IDs need only to be distinct per
-// backend.
-//
-// TODO(pavelkalinnikov): Replace the returned map with a fully fledged
-// ValidatedLogMultiConfig that contains a ValidatedLogConfig for each log.
-func ValidateLogMultiConfig(cfg *configpb.LogMultiConfig) (LogBackendMap, error) {
-	backendMap, err := BuildLogBackendMap(cfg.Backends)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := validateConfigs(cfg.GetLogConfigs().GetConfig()); err != nil {
-		return nil, err
-	}
-
-	// Check that logs all reference a defined backend.
-	logIDMap := make(map[string]bool)
-	for _, logCfg := range cfg.LogConfigs.Config {
-		if _, ok := backendMap[logCfg.LogBackendName]; !ok {
-			return nil, fmt.Errorf("log config: references undefined backend: %s: %v", logCfg.LogBackendName, logCfg)
-		}
-		logIDKey := fmt.Sprintf("%s-%d", logCfg.LogBackendName, logCfg.LogId)
-		if ok := logIDMap[logIDKey]; ok {
-			return nil, fmt.Errorf("log config: dup tree id: %d for: %v", logCfg.LogId, logCfg)
-		}
-		logIDMap[logIDKey] = true
-	}
-
-	return backendMap, nil
 }
 
 var stringToKeyUsage = map[string]x509.ExtKeyUsage{
