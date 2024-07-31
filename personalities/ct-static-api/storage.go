@@ -16,12 +16,9 @@ package ctfe
 
 import (
 	"context"
-	"fmt"
 
 	tessera "github.com/transparency-dev/trillian-tessera"
 	"github.com/transparency-dev/trillian-tessera/ctonly"
-	"github.com/transparency-dev/trillian-tessera/personalities/ct-static-api/configpb"
-	"github.com/transparency-dev/trillian-tessera/storage/gcp"
 )
 
 type Storage interface {
@@ -30,32 +27,18 @@ type Storage interface {
 }
 
 // ctStorage implements Storage
-type ctStorage struct {
-	storeData func(context.Context, *ctonly.Entry) (uint64, error)
+type CtStorage struct {
+	StoreData func(context.Context, *ctonly.Entry) (uint64, error)
 	// TODO(phboneff): add storeExtraData
 	// TODO(phboneff): add dedupe
 }
 
-func newCTSTorage(logStorage tessera.Storage) (*ctStorage, error) {
-	ctStorage := new(ctStorage)
-	ctStorage.storeData = tessera.NewCertificateTransparencySequencedWriter(logStorage)
+func NewCTSTorage(logStorage tessera.Storage) (*CtStorage, error) {
+	ctStorage := new(CtStorage)
+	ctStorage.StoreData = tessera.NewCertificateTransparencySequencedWriter(logStorage)
 	return ctStorage, nil
 }
 
-func (cts ctStorage) Add(ctx context.Context, entry *ctonly.Entry) (uint64, error) {
-	return cts.storeData(ctx, entry)
-}
-
-func NewGCPStorage(ctx context.Context, cfg *configpb.GCPConfig) (*ctStorage, error) {
-	gcpCfg := gcp.Config{
-		// TODO(phboneff): get projectID in a better way
-		ProjectID: "phboneff-dev",
-		Bucket:    cfg.Bucket,
-		Spanner:   cfg.SpannerDbPath,
-	}
-	storage, err := gcp.New(ctx, gcpCfg)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to initialize GCP storage: %v", err)
-	}
-	return newCTSTorage(storage)
+func (cts CtStorage) Add(ctx context.Context, entry *ctonly.Entry) (uint64, error) {
+	return cts.StoreData(ctx, entry)
 }

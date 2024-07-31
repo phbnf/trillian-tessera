@@ -44,6 +44,7 @@ import (
 	"github.com/tomasen/realip"
 	ctfe "github.com/transparency-dev/trillian-tessera/personalities/ct-static-api"
 	"github.com/transparency-dev/trillian-tessera/personalities/ct-static-api/configpb"
+	"github.com/transparency-dev/trillian-tessera/storage/gcp"
 	"google.golang.org/protobuf/proto"
 	"k8s.io/klog/v2"
 )
@@ -286,7 +287,7 @@ func setupAndRegister(ctx context.Context, deadline time.Duration, cfg *configpb
 
 	switch cfg.StorageConfig.(type) {
 	case *configpb.LogConfig_Gcp:
-		storage, err := ctfe.NewGCPStorage(ctx, cfg.GetGcp())
+		storage, err := newGCPStorage(ctx, cfg.GetGcp())
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize GCP storage: %v", err)
 		}
@@ -303,4 +304,18 @@ func setupAndRegister(ctx context.Context, deadline time.Duration, cfg *configpb
 		mux.Handle(path, handler)
 	}
 	return inst, nil
+}
+
+func newGCPStorage(ctx context.Context, cfg *configpb.GCPConfig) (*ctfe.CtStorage, error) {
+	gcpCfg := gcp.Config{
+		// TODO(phboneff): get projectID in a better way
+		ProjectID: "phboneff-dev",
+		Bucket:    cfg.Bucket,
+		Spanner:   cfg.SpannerDbPath,
+	}
+	storage, err := gcp.New(ctx, gcpCfg)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to initialize GCP storage: %v", err)
+	}
+	return ctfe.NewCTSTorage(storage)
 }
