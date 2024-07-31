@@ -46,8 +46,8 @@ import (
 	"k8s.io/klog/v2"
 
 	ct "github.com/google/certificate-transparency-go"
-	"github.com/google/certificate-transparency-go/trillian/ctfe/configpb"
 	cttestonly "github.com/google/certificate-transparency-go/trillian/ctfe/testonly"
+	"github.com/transparency-dev/trillian-tessera/personalities/ct-static-api/configpb"
 )
 
 // Arbitrary time for use in tests
@@ -157,7 +157,7 @@ func setupTest(t *testing.T, pemRoots []string, signer crypto.Signer) handlerTes
 		rejectExpired: false,
 	}
 
-	cfg := &configpb.LogConfig{LogId: 0x42, Prefix: "test", IsMirror: false}
+	cfg := &configpb.LogConfig{Origin: "test"}
 	vCfg := &ValidatedLogConfig{Config: cfg}
 	iOpts := InstanceOptions{Validated: vCfg, Client: info.client, Deadline: time.Millisecond * 500, MetricFactory: monitoring.InertMetricFactory{}, RequestLog: new(DefaultRequestLog)}
 	info.li = newLogInfo(iOpts, vOpts, signer, fakeTimeSource, &directIssuanceChainService{})
