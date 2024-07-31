@@ -657,7 +657,7 @@ func logLeafForCert(t *testing.T, certs []*x509.Certificate, merkleLeaf *ct.Merk
 		t.Fatalf("failed to serialize leaf: %v", err)
 	}
 
-	raw := extractRawCerts(certs)
+	raw := extractRawCerts(t, certs)
 	leafIDHash := sha256.Sum256(raw[0].Data)
 
 	extraData, err := util.ExtraDataForChain(raw[0], raw[1:], isPrecert)
@@ -666,6 +666,16 @@ func logLeafForCert(t *testing.T, certs []*x509.Certificate, merkleLeaf *ct.Merk
 	}
 
 	return &trillian.LogLeaf{LeafIdentityHash: leafIDHash[:], LeafValue: leafData, ExtraData: extraData}
+}
+
+// copied from certificate-transparency-go/trillian/ctfe/services.go
+func extractRawCerts(t *testing.T, chain []*x509.Certificate) []ct.ASN1Cert {
+	t.Helper()
+	raw := make([]ct.ASN1Cert, len(chain))
+	for i, cert := range chain {
+		raw[i] = ct.ASN1Cert{Data: cert.Raw}
+	}
+	return raw
 }
 
 type dlMatcher struct {
