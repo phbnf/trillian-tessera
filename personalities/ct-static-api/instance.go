@@ -29,7 +29,6 @@ import (
 
 	"github.com/google/certificate-transparency-go/asn1"
 	"github.com/google/certificate-transparency-go/trillian/ctfe/cache"
-	"github.com/google/certificate-transparency-go/trillian/ctfe/storage"
 	"github.com/google/certificate-transparency-go/trillian/util"
 	"github.com/google/certificate-transparency-go/x509"
 	"github.com/google/certificate-transparency-go/x509util"
@@ -158,24 +157,7 @@ func setUpLogInfo(ctx context.Context, opts InstanceOptions) (*logInfo, error) {
 		return nil, fmt.Errorf("failed to parse RejectExtensions: %v", err)
 	}
 
-	// Initialise IssuanceChainService with IssuanceChainStorage and IssuanceChainCache.
-	issuanceChainStorage, err := storage.NewIssuanceChainStorage(ctx, vCfg.ExtraDataIssuanceChainStorageBackend, vCfg.CTFEStorageConnectionString)
-	if err != nil {
-		return nil, err
-	}
-	if issuanceChainStorage == nil {
-		return newLogInfo(opts, validationOpts, signer, new(util.SystemTimeSource), &directIssuanceChainService{}), nil
-	}
-
-	// We are storing chains outside of Trillian, so set up cache and service.
-	issuanceChainCache, err := cache.NewIssuanceChainCache(ctx, opts.CacheType, opts.CacheOption)
-	if err != nil {
-		return nil, err
-	}
-
-	issuanceChainService := newIndirectIssuanceChainService(issuanceChainStorage, issuanceChainCache)
-
-	logInfo := newLogInfo(opts, validationOpts, signer, new(util.SystemTimeSource), issuanceChainService)
+	logInfo := newLogInfo(opts, validationOpts, signer, new(util.SystemTimeSource))
 	return logInfo, nil
 }
 
