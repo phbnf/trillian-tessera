@@ -47,12 +47,9 @@ message LogConfigSet {
 //
 // NEXT_ID: 14
 message LogConfig {
-  // prefix is the name of the log. It will come after the global or
-  // override handler prefix. For example if the handler prefix is "/logs"
-  // and prefix is "vogon" the get-sth handler for this log will be
-  // available at "/logs/vogon/ct/v1/get-sth". The prefix cannot be empty
-  // and must not include "/" path separator characters.
-  string prefix = 1;
+  // origin identifies the log. It will be used in its checkpoint, and
+  // is also its submission prefix, as per https://c2sp.org/static-ct-api
+  string origin = 1;
   // Paths to the files containing root certificates that are acceptable to the
   // log. The certs are served through get-roots endpoint.
   repeated string roots_pem_file = 2;
