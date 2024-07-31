@@ -112,7 +112,7 @@ func (a AppHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	reqsCounter.Inc(label0, label1)
 	startTime := a.Info.TimeSource.Now()
 	logCtx := a.Info.RequestLog.Start(r.Context())
-	a.Info.RequestLog.LogPrefix(logCtx, a.Info.LogPrefix)
+	a.Info.RequestLog.LogOrigin(logCtx, a.Info.LogPrefix)
 	defer func() {
 		latency := a.Info.TimeSource.Now().Sub(startTime).Seconds()
 		rspLatency.Observe(latency, label0, label1, strconv.Itoa(statusCode))
@@ -207,7 +207,7 @@ type leafChainBuilder interface {
 // logInfo holds information for a specific log instance.
 type logInfo struct {
 	// LogPrefix is a pre-formatted string identifying the log for diagnostics
-	LogPrefix string
+	LogOrigin x string
 	// TimeSource is a util.TimeSource that can be injected for testing
 	TimeSource util.TimeSource
 	// RequestLog is a logger for various request / processing / response debug
