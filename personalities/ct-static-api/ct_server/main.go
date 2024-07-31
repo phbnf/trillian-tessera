@@ -33,7 +33,6 @@ import (
 	"time"
 
 	"github.com/google/certificate-transparency-go/trillian/ctfe/cache"
-	"github.com/google/certificate-transparency-go/trillian/ctfe/configpb"
 	"github.com/google/trillian"
 	"github.com/google/trillian/crypto/keys"
 	"github.com/google/trillian/crypto/keys/der"
@@ -46,6 +45,7 @@ import (
 	"github.com/rs/cors"
 	"github.com/tomasen/realip"
 	ctfe "github.com/transparency-dev/trillian-tessera/personalities/ct-static-api"
+	"github.com/transparency-dev/trillian-tessera/personalities/ct-static-api/configpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/naming/endpoints"
 	"google.golang.org/grpc"
