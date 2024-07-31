@@ -97,7 +97,7 @@ func SetUpInstance(ctx context.Context, opts InstanceOptions) (*Instance, error)
 	if err != nil {
 		return nil, err
 	}
-	handlers := logInfo.Handlers(opts.Validated.Config.Prefix)
+	handlers := logInfo.Handlers(opts.Validated.Config.Origin)
 	return &Instance{Handlers: handlers, li: logInfo}, nil
 }
 
