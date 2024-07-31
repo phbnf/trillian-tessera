@@ -65,16 +65,16 @@ const (
 )
 
 var (
-	// Metrics are all per-log (label "logid"), but may also be
+	// Metrics are all per-log (label "origin"), but may also be
 	// per-entrypoint (label "ep") or per-return-code (label "rc").
 	once             sync.Once
-	knownLogs        monitoring.Gauge     // logid => value (always 1.0)
-	maxMergeDelay    monitoring.Gauge     // logid => value
-	expMergeDelay    monitoring.Gauge     // logid => value
-	lastSCTTimestamp monitoring.Gauge     // logid => value
-	reqsCounter      monitoring.Counter   // logid, ep => value
-	rspsCounter      monitoring.Counter   // logid, ep, rc => value
-	rspLatency       monitoring.Histogram // logid, ep, rc => value
+	knownLogs        monitoring.Gauge     // origin => value (always 1.0)
+	maxMergeDelay    monitoring.Gauge     // origin => value
+	expMergeDelay    monitoring.Gauge     // origin => value
+	lastSCTTimestamp monitoring.Gauge     // origin => value
+	reqsCounter      monitoring.Counter   // origin, ep => value
+	rspsCounter      monitoring.Counter   // origin, ep, rc => value
+	rspLatency       monitoring.Histogram // origin, ep, rc => value
 )
 
 // setupMetrics initializes all the exported metrics.
@@ -107,7 +107,7 @@ type AppHandler struct {
 // does additional common error and stats processing.
 func (a AppHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var statusCode int
-	label0 := strconv.FormatInt(a.Info.logID, 10)
+	label0 := a.Info.LogOrigin
 	label1 := string(a.Name)
 	reqsCounter.Inc(label0, label1)
 	startTime := a.Info.TimeSource.Now()
@@ -234,10 +234,8 @@ func newLogInfo(
 	vCfg := instanceOpts.Validated
 	cfg := vCfg.Config
 
-	logID, prefix := cfg.LogId, cfg.Origin
 	li := &logInfo{
-		logID:          logID,
-		LogOrigin:      fmt.Sprintf("%s{%d}", prefix, logID),
+		LogOrigin:      cfg.Origin,
 		rpcClient:      instanceOpts.Client,
 		signer:         signer,
 		TimeSource:     timeSource,
@@ -247,8 +245,8 @@ func newLogInfo(
 	}
 
 	once.Do(func() { setupMetrics(instanceOpts.MetricFactory) })
-	label := strconv.FormatInt(logID, 10)
-	knownLogs.Set(1.0, label)
+	label := cfg.Origin
+	knownLogs.Set(1.0, cfg.Origin)
 
 	maxMergeDelay.Set(float64(cfg.MaxMergeDelaySec), label)
 	expMergeDelay.Set(float64(cfg.ExpectedMergeDelaySec), label)
