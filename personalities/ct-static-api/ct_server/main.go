@@ -57,7 +57,6 @@ var (
 	metricsEndpoint    = flag.String("metrics_endpoint", "", "Endpoint for serving metrics; if left empty, metrics will be visible on --http_endpoint")
 	rpcDeadline        = flag.Duration("rpc_deadline", time.Second*10, "Deadline for backend RPC requests")
 	logConfig          = flag.String("log_config", "", "File holding log config in text proto format")
-	maxGetEntries      = flag.Int64("max_get_entries", 0, "Max number of entries we allow in a get-entries request (0=>use default 1000)")
 	etcdServers        = flag.String("etcd_servers", "", "A comma-separated list of etcd servers")
 	etcdHTTPService    = flag.String("etcd_http_service", "trillian-ctfe-http", "Service name to announce our HTTP endpoint under")
 	etcdMetricsService = flag.String("etcd_metrics_service", "trillian-ctfe-metrics-http", "Service name to announce our HTTP metrics endpoint under")
@@ -90,10 +89,6 @@ func main() {
 		}
 		return nil, fmt.Errorf("pkcs11: got %T, want *keyspb.PKCS11Config", pb)
 	})
-
-	if *maxGetEntries > 0 {
-		ctfe.MaxGetEntriesAllowed = *maxGetEntries
-	}
 
 	//var cfg *configpb.LogConfigSet
 	//var err error
