@@ -41,9 +41,9 @@ func init() {
 func TestSetUpInstance(t *testing.T) {
 	ctx := context.Background()
 
-	privKey := mustMarshalAny(&keyspb.PEMKeyFile{Path: "../testdata/ct-http-server.privkey.pem", Password: "dirk"})
-	missingPrivKey := mustMarshalAny(&keyspb.PEMKeyFile{Path: "../testdata/bogus.privkey.pem", Password: "dirk"})
-	wrongPassPrivKey := mustMarshalAny(&keyspb.PEMKeyFile{Path: "../testdata/ct-http-server.privkey.pem", Password: "dirkly"})
+	privKey := mustMarshalAny(&keyspb.PEMKeyFile{Path: "./testdata/ct-http-server.privkey.pem", Password: "dirk"})
+	missingPrivKey := mustMarshalAny(&keyspb.PEMKeyFile{Path: "./testdata/bogus.privkey.pem", Password: "dirk"})
+	wrongPassPrivKey := mustMarshalAny(&keyspb.PEMKeyFile{Path: "./testdata/ct-http-server.privkey.pem", Password: "dirkly"})
 
 	var tests = []struct {
 		desc    string
@@ -54,7 +54,7 @@ func TestSetUpInstance(t *testing.T) {
 			desc: "valid",
 			cfg: &configpb.LogConfig{
 				Origin:       "log",
-				RootsPemFile: []string{"../testdata/fake-ca.cert"},
+				RootsPemFile: []string{"./testdata/fake-ca.cert"},
 				PrivateKey:   privKey,
 			},
 		},
@@ -79,7 +79,7 @@ func TestSetUpInstance(t *testing.T) {
 			desc: "missing-privkey",
 			cfg: &configpb.LogConfig{
 				Origin:       "log",
-				RootsPemFile: []string{"../testdata/fake-ca.cert"},
+				RootsPemFile: []string{"./testdata/fake-ca.cert"},
 				PrivateKey:   missingPrivKey,
 			},
 			wantErr: "failed to load private key",
@@ -88,7 +88,7 @@ func TestSetUpInstance(t *testing.T) {
 			desc: "privkey-wrong-password",
 			cfg: &configpb.LogConfig{
 				Origin:       "log",
-				RootsPemFile: []string{"../testdata/fake-ca.cert"},
+				RootsPemFile: []string{"./testdata/fake-ca.cert"},
 				PrivateKey:   wrongPassPrivKey,
 			},
 			wantErr: "failed to load private key",
@@ -97,7 +97,7 @@ func TestSetUpInstance(t *testing.T) {
 			desc: "valid-ekus-1",
 			cfg: &configpb.LogConfig{
 				Origin:       "log",
-				RootsPemFile: []string{"../testdata/fake-ca.cert"},
+				RootsPemFile: []string{"./testdata/fake-ca.cert"},
 				PrivateKey:   privKey,
 				ExtKeyUsages: []string{"Any"},
 			},
@@ -106,7 +106,7 @@ func TestSetUpInstance(t *testing.T) {
 			desc: "valid-ekus-2",
 			cfg: &configpb.LogConfig{
 				Origin:       "log",
-				RootsPemFile: []string{"../testdata/fake-ca.cert"},
+				RootsPemFile: []string{"./testdata/fake-ca.cert"},
 				PrivateKey:   privKey,
 				ExtKeyUsages: []string{"Any", "ServerAuth", "TimeStamping"},
 			},
@@ -115,7 +115,7 @@ func TestSetUpInstance(t *testing.T) {
 			desc: "valid-reject-ext",
 			cfg: &configpb.LogConfig{
 				Origin:           "log",
-				RootsPemFile:     []string{"../testdata/fake-ca.cert"},
+				RootsPemFile:     []string{"./testdata/fake-ca.cert"},
 				PrivateKey:       privKey,
 				RejectExtensions: []string{"1.2.3.4", "5.6.7.8"},
 			},
@@ -124,7 +124,7 @@ func TestSetUpInstance(t *testing.T) {
 			desc: "invalid-reject-ext",
 			cfg: &configpb.LogConfig{
 				Origin:           "log",
-				RootsPemFile:     []string{"../testdata/fake-ca.cert"},
+				RootsPemFile:     []string{"./testdata/fake-ca.cert"},
 				PrivateKey:       privKey,
 				RejectExtensions: []string{"1.2.3.4", "one.banana.two.bananas"},
 			},
@@ -173,7 +173,7 @@ func TestSetUpInstanceSetsValidationOpts(t *testing.T) {
 	start := timestamppb.New(time.Unix(10000, 0))
 	limit := timestamppb.New(time.Unix(12000, 0))
 
-	privKey, err := anypb.New(&keyspb.PEMKeyFile{Path: "../testdata/ct-http-server.privkey.pem", Password: "dirk"})
+	privKey, err := anypb.New(&keyspb.PEMKeyFile{Path: "./testdata/ct-http-server.privkey.pem", Password: "dirk"})
 	if err != nil {
 		t.Fatalf("Could not marshal private key proto: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestSetUpInstanceSetsValidationOpts(t *testing.T) {
 			desc: "no validation opts",
 			cfg: &configpb.LogConfig{
 				Origin:       "/log",
-				RootsPemFile: []string{"../testdata/fake-ca.cert"},
+				RootsPemFile: []string{"./testdata/fake-ca.cert"},
 				PrivateKey:   privKey,
 			},
 		},
@@ -193,7 +193,7 @@ func TestSetUpInstanceSetsValidationOpts(t *testing.T) {
 			desc: "notAfterStart only",
 			cfg: &configpb.LogConfig{
 				Origin:        "/log",
-				RootsPemFile:  []string{"../testdata/fake-ca.cert"},
+				RootsPemFile:  []string{"./testdata/fake-ca.cert"},
 				PrivateKey:    privKey,
 				NotAfterStart: start,
 			},
@@ -202,7 +202,7 @@ func TestSetUpInstanceSetsValidationOpts(t *testing.T) {
 			desc: "notAfter range",
 			cfg: &configpb.LogConfig{
 				Origin:        "/log",
-				RootsPemFile:  []string{"../testdata/fake-ca.cert"},
+				RootsPemFile:  []string{"./testdata/fake-ca.cert"},
 				PrivateKey:    privKey,
 				NotAfterStart: start,
 				NotAfterLimit: limit,
@@ -212,7 +212,7 @@ func TestSetUpInstanceSetsValidationOpts(t *testing.T) {
 			desc: "caOnly",
 			cfg: &configpb.LogConfig{
 				Origin:       "/log",
-				RootsPemFile: []string{"../testdata/fake-ca.cert"},
+				RootsPemFile: []string{"./testdata/fake-ca.cert"},
 				PrivateKey:   privKey,
 				AcceptOnlyCa: true,
 			},

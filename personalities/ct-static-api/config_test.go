@@ -78,7 +78,7 @@ func TestValidateLogConfig(t *testing.T) {
 	}{
 		{
 			desc:    "empty-submission-prefix",
-			wantErr: "empty log Origin",
+			wantErr: "empty log origin",
 			cfg:     &configpb.LogConfig{},
 		},
 		{
