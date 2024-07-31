@@ -97,6 +97,11 @@ func ValidateLogConfig(cfg *configpb.LogConfig) (*ValidatedLogConfig, error) {
 		return nil, errors.New("rejecting all certificates")
 	}
 
+	// validate storage config
+	if cfg.StorageConfig == nil {
+		return nil, errors.New("empty storage config")
+	}
+
 	// Validate the extended key usages list.
 	if len(cfg.ExtKeyUsages) > 0 {
 		for _, kuStr := range cfg.ExtKeyUsages {
