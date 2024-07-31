@@ -103,27 +103,14 @@ func main() {
 		ctfe.MaxGetEntriesAllowed = *maxGetEntries
 	}
 
-	var cfg *configpb.LogMultiConfig
-	var err error
-	// Get log config from file before we start. This is a different proto
-	// type if we're using a multi backend configuration (no rpcBackend set
-	// in flags). The single-backend config is converted to a multi config so
-	// they can be treated the same.
-	if len(*rpcBackend) > 0 {
-		var cfgs []*configpb.LogConfig
-		if cfgs, err = ctfe.LogConfigFromFile(*logConfig); err == nil {
-			cfg = ctfe.ToMultiLogConfig(cfgs, *rpcBackend)
-		}
-	} else {
-		cfg, err = ctfe.MultiLogConfigFromFile(*logConfig)
-	}
-
+	//var cfg *configpb.LogConfigSet
+	//var err error
+	cfgs, err := ctfe.LogConfigSetFromFile(*logConfig)
 	if err != nil {
 		klog.Exitf("Failed to read config: %v", err)
 	}
 
-	beMap, err := ctfe.ValidateLogMultiConfig(cfg)
-	if err != nil {
+	if err := ctfe.ValidateLogConfigSet(cfgs); err != nil {
 		klog.Exitf("Invalid config: %v", err)
 	}
 
@@ -224,7 +211,7 @@ func main() {
 	// Register handlers for all the configured logs using the correct RPC
 	// client.
 	var publicKeys []crypto.PublicKey
-	for _, c := range cfg.LogConfigs.Config {
+	for _, c := range cfgs.Config {
 		inst, err := setupAndRegister(ctx,
 			clientMap[c.LogBackendName],
 			*rpcDeadline,
@@ -239,7 +226,7 @@ func main() {
 			},
 		)
 		if err != nil {
-			klog.Exitf("Failed to set up log instance for %+v: %v", cfg, err)
+			klog.Exitf("Failed to set up log instance for %+v: %v", cfgs, err)
 		}
 		if *getSTHInterval > 0 {
 			go inst.RunUpdateSTH(ctx, *getSTHInterval)
