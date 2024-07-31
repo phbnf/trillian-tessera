@@ -39,10 +39,10 @@ type ValidatedLogConfig struct {
 	NotAfterLimit *time.Time
 }
 
-// LogConfigFromFile creates a slice of LogConfig options from the given
+// LogConfigSetFromFile creates a slice of LogConfigSet options from the given
 // filename, which should contain text or binary-encoded protobuf configuration
 // data.
-func LogConfigFromFile(filename string) ([]*configpb.LogConfig, error) {
+func LogConfigSetFromFile(filename string) (*configpb.LogConfigSet, error) {
 	cfgBytes, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
@@ -58,7 +58,7 @@ func LogConfigFromFile(filename string) ([]*configpb.LogConfig, error) {
 	if len(cfg.Config) == 0 {
 		return nil, errors.New("empty log config found")
 	}
-	return cfg.Config, nil
+	return &cfg, nil
 }
 
 // ValidateLogConfig checks that a single log config is valid. In particular:
@@ -157,11 +157,11 @@ func ValidateLogConfig(cfg *configpb.LogConfig) (*ValidatedLogConfig, error) {
 	return &vCfg, nil
 }
 
-func validateConfigs(cfg []*configpb.LogConfig) error {
+func validateConfigs(cfg *configpb.LogConfigSet) error {
 	// Check that logs have no duplicate or empty prefixes. Apply other LogConfig
 	// specific checks.
 	logNameMap := make(map[string]bool)
-	for _, logCfg := range cfg {
+	for _, logCfg := range cfg.Config {
 		if _, err := ValidateLogConfig(logCfg); err != nil {
 			return fmt.Errorf("log config: %v: %v", err, logCfg)
 		}
