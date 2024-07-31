@@ -7,6 +7,7 @@ require (
 	cloud.google.com/go/storage v1.43.0
 	github.com/gdamore/tcell/v2 v2.7.4
 	github.com/globocom/go-buffer v1.2.2
+	github.com/golang/mock v1.6.0
 	github.com/google/certificate-transparency-go v1.2.1
 	github.com/google/go-cmp v0.6.0
 	github.com/google/trillian v1.6.0
@@ -14,6 +15,7 @@ require (
 	github.com/rivo/tview v0.0.0-20240625185742-b0a7293b8130
 	github.com/rs/cors v1.11.0
 	github.com/tomasen/realip v0.0.0-20180522021738-f0c99a92ddce
+	github.com/kylelemons/godebug v1.1.0
 	github.com/transparency-dev/formats v0.0.0-20240715203801-9ff9b9e3905f
 	github.com/transparency-dev/merkle v0.0.2
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
