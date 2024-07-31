@@ -10,6 +10,10 @@ require (
 	github.com/google/certificate-transparency-go v1.2.1
 	github.com/google/go-cmp v0.6.0
 	github.com/google/trillian v1.6.0
+	github.com/kylelemons/godebug v1.1.0
+	github.com/prometheus/client_golang v1.19.1
+	github.com/rs/cors v1.11.0
+	github.com/tomasen/realip v0.0.0-20180522021738-f0c99a92ddce
 	github.com/transparency-dev/formats v0.0.0-20240715203801-9ff9b9e3905f
 	github.com/transparency-dev/merkle v0.0.2
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
