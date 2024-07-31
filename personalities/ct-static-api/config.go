@@ -21,8 +21,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/google/certificate-transparency-go/trillian/ctfe/configpb"
 	"github.com/google/certificate-transparency-go/x509"
+	"github.com/transparency-dev/trillian-tessera/personalities/ct-static-api/configpb"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 	"k8s.io/klog/v2"
@@ -62,17 +62,15 @@ func LogConfigSetFromFile(filename string) (*configpb.LogConfigSet, error) {
 }
 
 // ValidateLogConfig checks that a single log config is valid. In particular:
-//   - A mirror log has a valid public key and no private key.
-//   - A non-mirror log has a private, and optionally a public key (both valid).
+//   - A log has a private, and optionally a public key (both valid).
 //   - Each of NotBeforeStart and NotBeforeLimit, if set, is a valid timestamp
 //     proto. If both are set then NotBeforeStart <= NotBeforeLimit.
 //   - Merge delays (if present) are correct.
-//   - Frozen STH (if present) is correct and signed by the provided public key.
 //
 // Returns the validated structures (useful to avoid double validation).
 func ValidateLogConfig(cfg *configpb.LogConfig) (*ValidatedLogConfig, error) {
-	if cfg.LogId == 0 {
-		return nil, errors.New("empty log ID")
+	if len(cfg.Origin) == 0 {
+		return nil, errors.New("empty log origin")
 	}
 
 	vCfg := ValidatedLogConfig{Config: cfg}
@@ -83,25 +81,17 @@ func ValidateLogConfig(cfg *configpb.LogConfig) (*ValidatedLogConfig, error) {
 		if vCfg.PubKey, err = x509.ParsePKIXPublicKey(pubKey.Der); err != nil {
 			return nil, fmt.Errorf("x509.ParsePKIXPublicKey: %w", err)
 		}
-	} else if cfg.IsMirror {
-		return nil, errors.New("empty public key for mirror")
-	} else if cfg.FrozenSth != nil {
-		return nil, errors.New("empty public key for frozen STH")
 	}
 
 	// Validate the private key.
-	if !cfg.IsMirror {
-		if cfg.PrivateKey == nil {
-			return nil, errors.New("empty private key")
-		}
-		privKey, err := cfg.PrivateKey.UnmarshalNew()
-		if err != nil {
-			return nil, fmt.Errorf("invalid private key: %v", err)
-		}
-		vCfg.PrivKey = privKey
-	} else if cfg.PrivateKey != nil {
-		return nil, errors.New("unnecessary private key for mirror")
+	if cfg.PrivateKey == nil {
+		return nil, errors.New("empty private key")
 	}
+	privKey, err := cfg.PrivateKey.UnmarshalNew()
+	if err != nil {
+		return nil, fmt.Errorf("invalid private key: %v", err)
+	}
+	vCfg.PrivKey = privKey
 
 	if cfg.RejectExpired && cfg.RejectUnexpired {
 		return nil, errors.New("rejecting all certificates")
@@ -114,7 +104,7 @@ func ValidateLogConfig(cfg *configpb.LogConfig) (*ValidatedLogConfig, error) {
 				// If "Any" is specified, then we can ignore the entire list and
 				// just disable EKU checking.
 				if ku == x509.ExtKeyUsageAny {
-					klog.Infof("%s: Found ExtKeyUsageAny, allowing all EKUs", cfg.Prefix)
+					klog.Infof("%s: Found ExtKeyUsageAny, allowing all EKUs", cfg.Origin)
 					vCfg.KeyUsages = nil
 					break
 				}
@@ -165,13 +155,13 @@ func validateConfigs(cfg *configpb.LogConfigSet) error {
 		if _, err := ValidateLogConfig(logCfg); err != nil {
 			return fmt.Errorf("log config: %v: %v", err, logCfg)
 		}
-		if len(logCfg.Prefix) == 0 {
-			return fmt.Errorf("log config: empty prefix: %v", logCfg)
+		if len(logCfg.Origin) == 0 {
+			return fmt.Errorf("log config: empty origin: %v", logCfg)
 		}
-		if logNameMap[logCfg.Prefix] {
-			return fmt.Errorf("log config: duplicate prefix: %s: %v", logCfg.Prefix, logCfg)
+		if logNameMap[logCfg.Origin] {
+			return fmt.Errorf("log config: duplicate origin: %s: %v", logCfg.Origin, logCfg)
 		}
-		logNameMap[logCfg.Prefix] = true
+		logNameMap[logCfg.Origin] = true
 	}
 
 	return nil
