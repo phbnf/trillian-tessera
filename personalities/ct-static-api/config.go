@@ -61,7 +61,7 @@ func LogConfigSetFromFile(filename string) (*configpb.LogConfigSet, error) {
 	return &cfg, nil
 }
 
-// ValidateLogConfig checks that a single log config is valid. In particular:
+// validateLogConfig checks that a single log config is valid. In particular:
 //   - A log has a private, and optionally a public key (both valid).
 //   - Each of NotBeforeStart and NotBeforeLimit, if set, is a valid timestamp
 //     proto. If both are set then NotBeforeStart <= NotBeforeLimit.
@@ -147,7 +147,7 @@ func ValidateLogConfig(cfg *configpb.LogConfig) (*ValidatedLogConfig, error) {
 	return &vCfg, nil
 }
 
-func validateConfigs(cfg *configpb.LogConfigSet) error {
+func ValidateLogConfigSet(cfg *configpb.LogConfigSet) error {
 	// Check that logs have no duplicate or empty prefixes. Apply other LogConfig
 	// specific checks.
 	logNameMap := make(map[string]bool)

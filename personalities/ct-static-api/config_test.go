@@ -327,7 +327,7 @@ func TestValidateLogConfigSet(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			err := validateConfigs(tc.cfg)
+			err := ValidateLogConfigSet(tc.cfg)
 			if len(tc.wantErr) == 0 && err != nil {
 				t.Fatalf("ValidateLogConfigSet()=%v, want nil", err)
 			}
