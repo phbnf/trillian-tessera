@@ -112,14 +112,14 @@ func (a AppHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	reqsCounter.Inc(label0, label1)
 	startTime := a.Info.TimeSource.Now()
 	logCtx := a.Info.RequestLog.Start(r.Context())
-	a.Info.RequestLog.LogOrigin(logCtx, a.Info.LogPrefix)
+	a.Info.RequestLog.LogOrigin(logCtx, a.Info.LogOrigin)
 	defer func() {
 		latency := a.Info.TimeSource.Now().Sub(startTime).Seconds()
 		rspLatency.Observe(latency, label0, label1, strconv.Itoa(statusCode))
 	}()
-	klog.V(2).Infof("%s: request %v %q => %s", a.Info.LogPrefix, r.Method, r.URL, a.Name)
+	klog.V(2).Infof("%s: request %v %q => %s", a.Info.LogOrigin, r.Method, r.URL, a.Name)
 	if r.Method != a.Method {
-		klog.Warningf("%s: %s wrong HTTP method: %v", a.Info.LogPrefix, a.Name, r.Method)
+		klog.Warningf("%s: %s wrong HTTP method: %v", a.Info.LogOrigin, a.Name, r.Method)
 		a.Info.SendHTTPError(w, http.StatusMethodNotAllowed, fmt.Errorf("method not allowed: %s", r.Method))
 		a.Info.RequestLog.Status(logCtx, http.StatusMethodNotAllowed)
 		return
@@ -143,17 +143,17 @@ func (a AppHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var err error
 	statusCode, err = a.Handler(ctx, a.Info, w, r)
 	a.Info.RequestLog.Status(ctx, statusCode)
-	klog.V(2).Infof("%s: %s <= st=%d", a.Info.LogPrefix, a.Name, statusCode)
+	klog.V(2).Infof("%s: %s <= st=%d", a.Info.LogOrigin, a.Name, statusCode)
 	rspsCounter.Inc(label0, label1, strconv.Itoa(statusCode))
 	if err != nil {
-		klog.Warningf("%s: %s handler error: %v", a.Info.LogPrefix, a.Name, err)
+		klog.Warningf("%s: %s handler error: %v", a.Info.LogOrigin, a.Name, err)
 		a.Info.SendHTTPError(w, statusCode, err)
 		return
 	}
 
 	// Additional check, for consistency the handler must return an error for non-200 st
 	if statusCode != http.StatusOK {
-		klog.Warningf("%s: %s handler non 200 without error: %d %v", a.Info.LogPrefix, a.Name, statusCode, err)
+		klog.Warningf("%s: %s handler non 200 without error: %d %v", a.Info.LogOrigin, a.Name, statusCode, err)
 		a.Info.SendHTTPError(w, http.StatusInternalServerError, fmt.Errorf("http handler misbehaved, st: %d", statusCode))
 		return
 	}
@@ -200,14 +200,14 @@ func NewCertValidationOpts(trustedRoots *x509util.PEMCertPool, currentTime time.
 }
 
 type leafChainBuilder interface {
-	BuildLogLeaf(ctx context.Context, chain []*x509.Certificate, logPrefix string, merkleLeaf *ct.MerkleTreeLeaf, isPrecert bool) (*trillian.LogLeaf, error)
+	BuildLogLeaf(ctx context.Context, chain []*x509.Certificate, logOrigin string, merkleLeaf *ct.MerkleTreeLeaf, isPrecert bool) (*trillian.LogLeaf, error)
 	FixLogLeaf(ctx context.Context, leaf *trillian.LogLeaf) error
 }
 
 // logInfo holds information for a specific log instance.
 type logInfo struct {
-	// LogPrefix is a pre-formatted string identifying the log for diagnostics
-	LogOrigin x string
+	// LogOrigin is a pre-formatted string identifying the log for diagnostics
+	LogOrigin string
 	// TimeSource is a util.TimeSource that can be injected for testing
 	TimeSource util.TimeSource
 	// RequestLog is a logger for various request / processing / response debug
@@ -216,8 +216,6 @@ type logInfo struct {
 
 	// Instance-wide options
 	instanceOpts InstanceOptions
-	// logID is the tree ID that identifies this log in node storage
-	logID int64
 	// validationOpts contains the certificate chain validation parameters
 	validationOpts CertValidationOpts
 	// rpcClient is the client used to communicate with the Trillian backend
@@ -236,10 +234,10 @@ func newLogInfo(
 	vCfg := instanceOpts.Validated
 	cfg := vCfg.Config
 
-	logID, prefix := cfg.LogId, cfg.Prefix
+	logID, prefix := cfg.LogId, cfg.Origin
 	li := &logInfo{
 		logID:          logID,
-		LogPrefix:      fmt.Sprintf("%s{%d}", prefix, logID),
+		LogOrigin:      fmt.Sprintf("%s{%d}", prefix, logID),
 		rpcClient:      instanceOpts.Client,
 		signer:         signer,
 		TimeSource:     timeSource,
@@ -285,7 +283,7 @@ func (li *logInfo) SendHTTPError(w http.ResponseWriter, statusCode int, err erro
 }
 
 func (li *logInfo) buildLeaf(ctx context.Context, chain []*x509.Certificate, merkleLeaf *ct.MerkleTreeLeaf, isPrecert bool) (*trillian.LogLeaf, error) {
-	return li.issuanceChainService.BuildLogLeaf(ctx, chain, li.LogPrefix, merkleLeaf, isPrecert)
+	return li.issuanceChainService.BuildLogLeaf(ctx, chain, li.LogOrigin, merkleLeaf, isPrecert)
 }
 
 // ParseBodyAsJSONChain tries to extract cert-chain out of request.
@@ -348,7 +346,7 @@ func addChainInternal(ctx context.Context, li *logInfo, w http.ResponseWriter, r
 	// Check the contents of the request and convert to slice of certificates.
 	addChainReq, err := ParseBodyAsJSONChain(r)
 	if err != nil {
-		return http.StatusBadRequest, fmt.Errorf("%s: failed to parse add-chain body: %s", li.LogPrefix, err)
+		return http.StatusBadRequest, fmt.Errorf("%s: failed to parse add-chain body: %s", li.LogOrigin, err)
 	}
 	// Log the DERs now because they might not parse as valid X.509.
 	for _, der := range addChainReq.Chain {
@@ -388,9 +386,9 @@ func addChainInternal(ctx context.Context, li *logInfo, w http.ResponseWriter, r
 		}
 	}
 
-	klog.V(2).Infof("%s: %s => grpc.QueueLeaves", li.LogPrefix, method)
+	klog.V(2).Infof("%s: %s => grpc.QueueLeaves", li.LogOrigin, method)
 	rsp, err := li.rpcClient.QueueLeaf(ctx, &req)
-	klog.V(2).Infof("%s: %s <= grpc.QueueLeaves err=%v", li.LogPrefix, method, err)
+	klog.V(2).Infof("%s: %s <= grpc.QueueLeaves err=%v", li.LogOrigin, method, err)
 	if err != nil {
 		return li.toHTTPStatus(err), fmt.Errorf("backend QueueLeaves request failed: %s", err)
 	}
@@ -426,9 +424,9 @@ func addChainInternal(ctx context.Context, li *logInfo, w http.ResponseWriter, r
 		// reason is logged and http status is already set
 		return http.StatusInternalServerError, fmt.Errorf("failed to write response: %s", err)
 	}
-	klog.V(3).Infof("%s: %s <= SCT", li.LogPrefix, method)
+	klog.V(3).Infof("%s: %s <= SCT", li.LogOrigin, method)
 	if sct.Timestamp == timeMillis {
-		lastSCTTimestamp.Set(float64(sct.Timestamp), strconv.FormatInt(li.logID, 10))
+		lastSCTTimestamp.Set(float64(sct.Timestamp), li.LogOrigin)
 	}
 
 	return http.StatusOK, nil
@@ -466,9 +464,9 @@ func verifyAddChain(li *logInfo, req ct.AddChainRequest, expectingPrecert bool) 
 	// The type of the leaf must match the one the handler expects
 	if isPrecert != expectingPrecert {
 		if expectingPrecert {
-			klog.Warningf("%s: Cert (or precert with invalid CT ext) submitted as precert chain: %q", li.LogPrefix, req.Chain)
+			klog.Warningf("%s: Cert (or precert with invalid CT ext) submitted as precert chain: %q", li.LogOrigin, req.Chain)
 		} else {
-			klog.Warningf("%s: Precert (or cert with invalid CT ext) submitted as cert chain: %q", li.LogPrefix, req.Chain)
+			klog.Warningf("%s: Precert (or cert with invalid CT ext) submitted as cert chain: %q", li.LogOrigin, req.Chain)
 		}
 		return nil, fmt.Errorf("cert / precert mismatch: %T", expectingPrecert)
 	}
@@ -522,14 +520,14 @@ func marshalGetEntriesResponse(li *logInfo, leaves []*trillian.LogLeaf) (ct.GetE
 		// or data storage that should be investigated.
 		var treeLeaf ct.MerkleTreeLeaf
 		if rest, err := tls.Unmarshal(leaf.LeafValue, &treeLeaf); err != nil {
-			klog.Errorf("%s: Failed to deserialize Merkle leaf from backend: %d", li.LogPrefix, leaf.LeafIndex)
+			klog.Errorf("%s: Failed to deserialize Merkle leaf from backend: %d", li.LogOrigin, leaf.LeafIndex)
 		} else if len(rest) > 0 {
-			klog.Errorf("%s: Trailing data after Merkle leaf from backend: %d", li.LogPrefix, leaf.LeafIndex)
+			klog.Errorf("%s: Trailing data after Merkle leaf from backend: %d", li.LogOrigin, leaf.LeafIndex)
 		}
 
 		extraData := leaf.ExtraData
 		if len(extraData) == 0 {
-			klog.Errorf("%s: Missing ExtraData for leaf %d", li.LogPrefix, leaf.LeafIndex)
+			klog.Errorf("%s: Missing ExtraData for leaf %d", li.LogOrigin, leaf.LeafIndex)
 		}
 		jsonRsp.Entries = append(jsonRsp.Entries, ct.LeafEntry{
 			LeafInput: leaf.LeafValue,
