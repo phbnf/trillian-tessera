@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/google/certificate-transparency-go/asn1"
-	"github.com/google/certificate-transparency-go/schedule"
 	"github.com/google/certificate-transparency-go/trillian/ctfe/cache"
 	"github.com/google/certificate-transparency-go/trillian/ctfe/storage"
 	"github.com/google/certificate-transparency-go/trillian/util"
@@ -37,7 +36,6 @@ import (
 	"github.com/google/trillian"
 	"github.com/google/trillian/crypto/keys"
 	"github.com/google/trillian/monitoring"
-	"k8s.io/klog/v2"
 )
 
 // InstanceOptions describes the options for a log instance.
@@ -67,10 +65,6 @@ type InstanceOptions struct {
 	// limited. If unset, no quota will be requested for intermediate
 	// certificates.
 	CertificateQuotaUser func(*x509.Certificate) string
-	// STHStorage provides STHs of a source log for the mirror. Only mirror
-	// instances will use it, i.e. when IsMirror == true in the config. If it is
-	// empty then the DefaultMirrorSTHStorage will be used.
-	STHStorage MirrorSTHStorage
 	// MaskInternalErrors indicates if internal server errors should be masked
 	// or returned to the user containing the full error message.
 	MaskInternalErrors bool
@@ -83,22 +77,8 @@ type InstanceOptions struct {
 // Instance is a set up log/mirror instance. It must be created with the
 // SetUpInstance call.
 type Instance struct {
-	Handlers  PathHandlers
-	STHGetter STHGetter
-	li        *logInfo
-}
-
-// RunUpdateSTH regularly updates the Instance STH so our metrics stay
-// up-to-date with any tree head changes that are not triggered by us.
-func (i *Instance) RunUpdateSTH(ctx context.Context, period time.Duration) {
-	c := i.li.instanceOpts.Validated.Config
-	klog.Infof("Start internal get-sth operations on %v (%d)", c.Prefix, c.LogId)
-	schedule.Every(ctx, period, func(ctx context.Context) {
-		klog.V(1).Infof("Force internal get-sth for %v (%d)", c.Prefix, c.LogId)
-		if _, err := i.li.getSTH(ctx); err != nil {
-			klog.Warningf("Failed to retrieve STH for %v (%d): %v", c.Prefix, c.LogId, err)
-		}
-	})
+	Handlers PathHandlers
+	li       *logInfo
 }
 
 // GetPublicKey returns the public key from the instance's signer.
@@ -118,7 +98,7 @@ func SetUpInstance(ctx context.Context, opts InstanceOptions) (*Instance, error)
 		return nil, err
 	}
 	handlers := logInfo.Handlers(opts.Validated.Config.Prefix)
-	return &Instance{Handlers: handlers, STHGetter: logInfo.sthGetter, li: logInfo}, nil
+	return &Instance{Handlers: handlers, li: logInfo}, nil
 }
 
 func setUpLogInfo(ctx context.Context, opts InstanceOptions) (*logInfo, error) {
@@ -126,9 +106,10 @@ func setUpLogInfo(ctx context.Context, opts InstanceOptions) (*logInfo, error) {
 	cfg := vCfg.Config
 
 	// Check config validity.
-	if !cfg.IsMirror && len(cfg.RootsPemFile) == 0 {
+	if len(cfg.RootsPemFile) == 0 {
 		return nil, errors.New("need to specify RootsPemFile")
 	}
+
 	// Load the trusted roots.
 	roots := x509util.NewPEMCertPool()
 	for _, pemFile := range cfg.RootsPemFile {
@@ -138,30 +119,28 @@ func setUpLogInfo(ctx context.Context, opts InstanceOptions) (*logInfo, error) {
 	}
 
 	var signer crypto.Signer
-	if !cfg.IsMirror {
-		var err error
-		if signer, err = keys.NewSigner(ctx, vCfg.PrivKey); err != nil {
-			return nil, fmt.Errorf("failed to load private key: %v", err)
-		}
+	var err error
+	if signer, err = keys.NewSigner(ctx, vCfg.PrivKey); err != nil {
+		return nil, fmt.Errorf("failed to load private key: %v", err)
+	}
 
-		// If a public key has been configured for a log, check that it is consistent with the private key.
-		if vCfg.PubKey != nil {
-			switch pub := vCfg.PubKey.(type) {
-			case *ecdsa.PublicKey:
-				if !pub.Equal(signer.Public()) {
-					return nil, errors.New("public key is not consistent with private key")
-				}
-			case ed25519.PublicKey:
-				if !pub.Equal(signer.Public()) {
-					return nil, errors.New("public key is not consistent with private key")
-				}
-			case *rsa.PublicKey:
-				if !pub.Equal(signer.Public()) {
-					return nil, errors.New("public key is not consistent with private key")
-				}
-			default:
-				return nil, errors.New("failed to verify consistency of public key with private key")
+	// If a public key has been configured for a log, check that it is consistent with the private key.
+	if vCfg.PubKey != nil {
+		switch pub := vCfg.PubKey.(type) {
+		case *ecdsa.PublicKey:
+			if !pub.Equal(signer.Public()) {
+				return nil, errors.New("public key is not consistent with private key")
 			}
+		case ed25519.PublicKey:
+			if !pub.Equal(signer.Public()) {
+				return nil, errors.New("public key is not consistent with private key")
+			}
+		case *rsa.PublicKey:
+			if !pub.Equal(signer.Public()) {
+				return nil, errors.New("public key is not consistent with private key")
+			}
+		default:
+			return nil, errors.New("failed to verify consistency of public key with private key")
 		}
 	}
 
@@ -174,7 +153,6 @@ func setUpLogInfo(ctx context.Context, opts InstanceOptions) (*logInfo, error) {
 		acceptOnlyCA:    cfg.AcceptOnlyCa,
 		extKeyUsages:    vCfg.KeyUsages,
 	}
-	var err error
 	validationOpts.rejectExtIds, err = parseOIDs(cfg.RejectExtensions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse RejectExtensions: %v", err)
