@@ -16,7 +16,6 @@ require (
 	github.com/tomasen/realip v0.0.0-20180522021738-f0c99a92ddce
 	github.com/transparency-dev/formats v0.0.0-20240715203801-9ff9b9e3905f
 	github.com/transparency-dev/merkle v0.0.2
-	go.etcd.io/etcd/client/v3 v3.5.15
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
 	golang.org/x/mod v0.19.0
 	google.golang.org/api v0.189.0
@@ -28,6 +27,22 @@ require (
 	cel.dev/expr v0.15.0 // indirect
 	cloud.google.com/go v0.115.0 // indirect
 	cloud.google.com/go/auth v0.7.2 // indirect
+	cloud.google.com/go/monitoring v1.20.1 // indirect
+	cloud.google.com/go/trace v1.10.9 // indirect
+	contrib.go.opencensus.io/exporter/stackdriver v0.13.14 // indirect
+	github.com/aws/aws-sdk-go v1.46.4 // indirect
+	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
+	github.com/letsencrypt/pkcs11key/v4 v4.0.0 // indirect
+	github.com/miekg/pkcs11 v1.1.1 // indirect
+	github.com/prometheus/client_model v0.5.0 // indirect
+	github.com/prometheus/common v0.48.0 // indirect
+	github.com/prometheus/procfs v0.12.0 // indirect
+	github.com/prometheus/prometheus v0.47.2 // indirect
+)
+
+require (
 	cloud.google.com/go/auth/oauth2adapt v0.2.3 // indirect
 	cloud.google.com/go/compute/metadata v0.5.0 // indirect
 	cloud.google.com/go/iam v1.1.10 // indirect
