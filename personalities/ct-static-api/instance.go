@@ -32,7 +32,6 @@ import (
 	"github.com/google/certificate-transparency-go/trillian/util"
 	"github.com/google/certificate-transparency-go/x509"
 	"github.com/google/certificate-transparency-go/x509util"
-	"github.com/google/trillian"
 	"github.com/google/trillian/crypto/keys"
 	"github.com/google/trillian/monitoring"
 )
@@ -42,9 +41,9 @@ type InstanceOptions struct {
 	// Validated holds the original configuration options for the log, and some
 	// of its fields parsed as a result of validating it.
 	Validated *ValidatedLogConfig
-	// Client is a corresponding Trillian log client.
-	Client trillian.TrillianLogClient
-	// Deadline is a timeout for Trillian RPC requests.
+	// Storage is a corresponding Tessera storage implementation.
+	Storage Storage
+	// Deadline is a timeout for Tessera requests.
 	Deadline time.Duration
 	// MetricFactory allows creating metrics.
 	MetricFactory monitoring.MetricFactory

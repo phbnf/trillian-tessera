@@ -283,6 +283,18 @@ func setupAndRegister(ctx context.Context, deadline time.Duration, cfg *configpb
 		klog.Info("Enabling quota for intermediate certificates")
 		opts.CertificateQuotaUser = ctfe.QuotaUserForCert
 	}
+
+	switch cfg.StorageConfig.(type) {
+	case *configpb.LogConfig_Gcp:
+		storage, err := ctfe.NewGCPStorage(ctx, cfg.GetGcp())
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize GCP storage: %v", err)
+		}
+		opts.Storage = storage
+	default:
+		return nil, fmt.Errorf("unrecognized storage config")
+	}
+
 	inst, err := ctfe.SetUpInstance(ctx, opts)
 	if err != nil {
 		return nil, err

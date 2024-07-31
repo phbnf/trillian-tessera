@@ -218,8 +218,8 @@ type logInfo struct {
 	instanceOpts InstanceOptions
 	// validationOpts contains the certificate chain validation parameters
 	validationOpts CertValidationOpts
-	// rpcClient is the client used to communicate with the Trillian backend
-	rpcClient trillian.TrillianLogClient
+	// storage stores log data
+	storage Storage
 	// signer signs objects (e.g. STHs, SCTs) for regular logs
 	signer crypto.Signer
 }
@@ -236,7 +236,7 @@ func newLogInfo(
 
 	li := &logInfo{
 		LogOrigin:      cfg.Origin,
-		rpcClient:      instanceOpts.Client,
+		storage:        instanceOpts.Storage,
 		signer:         signer,
 		TimeSource:     timeSource,
 		instanceOpts:   instanceOpts,
