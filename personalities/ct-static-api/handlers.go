@@ -34,7 +34,6 @@ import (
 	"github.com/google/certificate-transparency-go/trillian/util"
 	"github.com/google/certificate-transparency-go/x509"
 	"github.com/google/certificate-transparency-go/x509util"
-	"github.com/google/trillian"
 	"github.com/google/trillian/monitoring"
 	"github.com/transparency-dev/trillian-tessera/ctonly"
 	"k8s.io/klog/v2"
@@ -290,36 +289,6 @@ func ParseBodyAsJSONChain(r *http.Request) (ct.AddChainRequest, error) {
 	}
 
 	return req, nil
-}
-
-// marshalGetEntriesResponse does the conversion from the backend response to the one we need for
-// an RFC compliant JSON response to the client.
-func marshalGetEntriesResponse(li *logInfo, leaves []*trillian.LogLeaf) (ct.GetEntriesResponse, error) {
-	jsonRsp := ct.GetEntriesResponse{}
-
-	for _, leaf := range leaves {
-		// We're only deserializing it to ensure it's valid, don't need the result. We still
-		// return the data if it fails to deserialize as otherwise the root hash could not
-		// be verified. However this indicates a potentially serious failure in log operation
-		// or data storage that should be investigated.
-		var treeLeaf ct.MerkleTreeLeaf
-		if rest, err := tls.Unmarshal(leaf.LeafValue, &treeLeaf); err != nil {
-			klog.Errorf("%s: Failed to deserialize Merkle leaf from backend: %d", li.LogOrigin, leaf.LeafIndex)
-		} else if len(rest) > 0 {
-			klog.Errorf("%s: Trailing data after Merkle leaf from backend: %d", li.LogOrigin, leaf.LeafIndex)
-		}
-
-		extraData := leaf.ExtraData
-		if len(extraData) == 0 {
-			klog.Errorf("%s: Missing ExtraData for leaf %d", li.LogOrigin, leaf.LeafIndex)
-		}
-		jsonRsp.Entries = append(jsonRsp.Entries, ct.LeafEntry{
-			LeafInput: leaf.LeafValue,
-			ExtraData: extraData,
-		})
-	}
-
-	return jsonRsp, nil
 }
 
 // addChainInternal is called by add-chain and add-pre-chain as the logic involved in
