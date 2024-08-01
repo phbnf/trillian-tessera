@@ -224,8 +224,6 @@ type logInfo struct {
 	rpcClient trillian.TrillianLogClient
 	// signer signs objects (e.g. STHs, SCTs) for regular logs
 	signer crypto.Signer
-	// issuanceChainService provides the issuance chain add and get operations
-	issuanceChainService leafChainBuilder
 }
 
 // newLogInfo creates a new instance of logInfo.
@@ -234,7 +232,6 @@ func newLogInfo(
 	validationOpts CertValidationOpts,
 	signer crypto.Signer,
 	timeSource util.TimeSource,
-	issuanceChainService leafChainBuilder,
 ) *logInfo {
 	vCfg := instanceOpts.Validated
 	cfg := vCfg.Config
@@ -257,8 +254,6 @@ func newLogInfo(
 
 	maxMergeDelay.Set(float64(cfg.MaxMergeDelaySec), label)
 	expMergeDelay.Set(float64(cfg.ExpectedMergeDelaySec), label)
-
-	li.issuanceChainService = issuanceChainService
 
 	return li
 }
