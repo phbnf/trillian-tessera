@@ -37,24 +37,16 @@ import (
 	"github.com/google/trillian"
 	"github.com/google/trillian/monitoring"
 	"github.com/transparency-dev/trillian-tessera/ctonly"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"k8s.io/klog/v2"
 
 	ct "github.com/google/certificate-transparency-go"
 )
 
 const (
-	// HTTP Cache-Control header
-	cacheControlHeader = "Cache-Control"
-	// Value for Cache-Control header when response contains immutable data, i.e. entries or proofs. Allows the response to be cached for 1 day.
-	cacheControlImmutable = "public, max-age=86400"
 	// HTTP content type header
 	contentTypeHeader string = "Content-Type"
 	// MIME content type for JSON
 	contentTypeJSON string = "application/json"
-	// The name of the JSON response map key in get-roots responses
-	jsonMapKeyCertificates string = "certificates"
 )
 
 // EntrypointName identifies a CT entrypoint as defined in section 4 of RFC 6962.
@@ -201,11 +193,6 @@ func NewCertValidationOpts(trustedRoots *x509util.PEMCertPool, currentTime time.
 	return vOpts
 }
 
-type leafChainBuilder interface {
-	BuildLogLeaf(ctx context.Context, chain []*x509.Certificate, logOrigin string, merkleLeaf *ct.MerkleTreeLeaf, isPrecert bool) (*trillian.LogLeaf, error)
-	FixLogLeaf(ctx context.Context, leaf *trillian.LogLeaf) error
-}
-
 // logInfo holds information for a specific log instance.
 type logInfo struct {
 	// LogOrigin is a pre-formatted string identifying the log for diagnostics
@@ -305,25 +292,34 @@ func ParseBodyAsJSONChain(r *http.Request) (ct.AddChainRequest, error) {
 	return req, nil
 }
 
-// appendUserCharge adds the specified user to the passed in ChargeTo and
-// and returns the result.
-// If the passed-in ChargeTo is nil, then a new one is created with the passed
-// in user and returned.
-func appendUserCharge(a *trillian.ChargeTo, user string) *trillian.ChargeTo {
-	if a == nil {
-		a = &trillian.ChargeTo{}
-	}
-	a.User = append(a.User, user)
-	return a
-}
+// marshalGetEntriesResponse does the conversion from the backend response to the one we need for
+// an RFC compliant JSON response to the client.
+func marshalGetEntriesResponse(li *logInfo, leaves []*trillian.LogLeaf) (ct.GetEntriesResponse, error) {
+	jsonRsp := ct.GetEntriesResponse{}
 
-// chargeUser returns a trillian.ChargeTo containing an ID for the remote User,
-// or nil if instanceOpts does not have a RemoteQuotaUser function set.
-func (li *logInfo) chargeUser(r *http.Request) *trillian.ChargeTo {
-	if li.instanceOpts.RemoteQuotaUser != nil {
-		return &trillian.ChargeTo{User: []string{li.instanceOpts.RemoteQuotaUser(r)}}
+	for _, leaf := range leaves {
+		// We're only deserializing it to ensure it's valid, don't need the result. We still
+		// return the data if it fails to deserialize as otherwise the root hash could not
+		// be verified. However this indicates a potentially serious failure in log operation
+		// or data storage that should be investigated.
+		var treeLeaf ct.MerkleTreeLeaf
+		if rest, err := tls.Unmarshal(leaf.LeafValue, &treeLeaf); err != nil {
+			klog.Errorf("%s: Failed to deserialize Merkle leaf from backend: %d", li.LogOrigin, leaf.LeafIndex)
+		} else if len(rest) > 0 {
+			klog.Errorf("%s: Trailing data after Merkle leaf from backend: %d", li.LogOrigin, leaf.LeafIndex)
+		}
+
+		extraData := leaf.ExtraData
+		if len(extraData) == 0 {
+			klog.Errorf("%s: Missing ExtraData for leaf %d", li.LogOrigin, leaf.LeafIndex)
+		}
+		jsonRsp.Entries = append(jsonRsp.Entries, ct.LeafEntry{
+			LeafInput: leaf.LeafValue,
+			ExtraData: extraData,
+		})
 	}
-	return nil
+
+	return jsonRsp, nil
 }
 
 // addChainInternal is called by add-chain and add-pre-chain as the logic involved in
@@ -472,76 +468,6 @@ func marshalAndWriteAddChainResponse(sct *ct.SignedCertificateTimestamp, signer 
 	}
 
 	return nil
-}
-
-// marshalGetEntriesResponse does the conversion from the backend response to the one we need for
-// an RFC compliant JSON response to the client.
-func marshalGetEntriesResponse(li *logInfo, leaves []*trillian.LogLeaf) (ct.GetEntriesResponse, error) {
-	jsonRsp := ct.GetEntriesResponse{}
-
-	for _, leaf := range leaves {
-		// We're only deserializing it to ensure it's valid, don't need the result. We still
-		// return the data if it fails to deserialize as otherwise the root hash could not
-		// be verified. However this indicates a potentially serious failure in log operation
-		// or data storage that should be investigated.
-		var treeLeaf ct.MerkleTreeLeaf
-		if rest, err := tls.Unmarshal(leaf.LeafValue, &treeLeaf); err != nil {
-			klog.Errorf("%s: Failed to deserialize Merkle leaf from backend: %d", li.LogOrigin, leaf.LeafIndex)
-		} else if len(rest) > 0 {
-			klog.Errorf("%s: Trailing data after Merkle leaf from backend: %d", li.LogOrigin, leaf.LeafIndex)
-		}
-
-		extraData := leaf.ExtraData
-		if len(extraData) == 0 {
-			klog.Errorf("%s: Missing ExtraData for leaf %d", li.LogOrigin, leaf.LeafIndex)
-		}
-		jsonRsp.Entries = append(jsonRsp.Entries, ct.LeafEntry{
-			LeafInput: leaf.LeafValue,
-			ExtraData: extraData,
-		})
-	}
-
-	return jsonRsp, nil
-}
-
-func (li *logInfo) toHTTPStatus(err error) int {
-	if li.instanceOpts.ErrorMapper != nil {
-		if status, ok := li.instanceOpts.ErrorMapper(err); ok {
-			return status
-		}
-	}
-
-	rpcStatus, ok := status.FromError(err)
-	if !ok {
-		return http.StatusInternalServerError
-	}
-
-	switch rpcStatus.Code() {
-	case codes.OK:
-		return http.StatusOK
-	case codes.Canceled, codes.DeadlineExceeded:
-		return http.StatusGatewayTimeout
-	case codes.InvalidArgument, codes.OutOfRange, codes.AlreadyExists:
-		return http.StatusBadRequest
-	case codes.NotFound:
-		return http.StatusNotFound
-	case codes.PermissionDenied:
-		return http.StatusForbidden
-	case codes.ResourceExhausted:
-		return http.StatusTooManyRequests
-	case codes.Unauthenticated:
-		return http.StatusUnauthorized
-	case codes.FailedPrecondition:
-		return http.StatusPreconditionFailed
-	case codes.Aborted:
-		return http.StatusConflict
-	case codes.Unimplemented:
-		return http.StatusNotImplemented
-	case codes.Unavailable:
-		return http.StatusServiceUnavailable
-	default:
-		return http.StatusInternalServerError
-	}
 }
 
 // entryFromChain generates an Entry from a chain and timestamp.
