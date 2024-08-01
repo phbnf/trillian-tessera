@@ -15,11 +15,7 @@
 package ctfe
 
 import (
-	"crypto/x509"
-	"encoding/base64"
-	"encoding/pem"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 
@@ -40,31 +36,6 @@ func mustMarshalAny(pb proto.Message) *anypb.Any {
 		panic(fmt.Sprintf("MarshalAny failed: %v", err))
 	}
 	return ret
-}
-
-func mustReadPublicKey(path string) *keyspb.PublicKey {
-	keyPEM, err := os.ReadFile(path)
-	if err != nil {
-		panic(fmt.Sprintf("os.ReadFile(%q): %v", path, err))
-	}
-	block, _ := pem.Decode(keyPEM)
-	pubKey, err := x509.ParsePKIXPublicKey(block.Bytes)
-	if err != nil {
-		panic(fmt.Sprintf("ReadPublicKeyFile(): %v", err))
-	}
-	keyDER, err := x509.MarshalPKIXPublicKey(pubKey)
-	if err != nil {
-		panic(fmt.Sprintf("x509.MarshalPKIXPublicKey(): %v", err))
-	}
-	return &keyspb.PublicKey{Der: keyDER}
-}
-
-func mustDecodeBase64(str string) []byte {
-	data, err := base64.StdEncoding.DecodeString(str)
-	if err != nil {
-		panic(fmt.Sprintf("base64: DecodeString failed: %v", err))
-	}
-	return data
 }
 
 func TestValidateLogConfig(t *testing.T) {
