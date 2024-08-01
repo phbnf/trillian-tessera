@@ -83,6 +83,7 @@ message LogConfig {
   // which should cause submissions to be rejected.
   repeated string reject_extensions = 13;
 
+  // TODO(phboneff): re-think how this could work with other storage systems
   // storage_config describes Trillian Tessera storage config
   oneof storage_config {
     GCPConfig gcp = 14;
