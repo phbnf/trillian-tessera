@@ -91,6 +91,7 @@ message LogConfig {
 
 // GCPConfig describes Trillian Tessera GCP config
 message GCPConfig {
-  string bucket = 1;
-  string spanner_db_path = 2;
+  string project_id = 1;
+  string bucket = 2;
+  string spanner_db_path = 3;
 }

@@ -305,8 +305,7 @@ func setupAndRegister(ctx context.Context, deadline time.Duration, cfg *configpb
 
 func newGCPStorage(ctx context.Context, cfg *configpb.GCPConfig) (*ctfe.CTStorage, error) {
 	gcpCfg := gcp.Config{
-		// TODO(phboneff): get projectID in a better way
-		ProjectID: "phboneff-dev",
+		ProjectID: cfg.ProjectId,
 		Bucket:    cfg.Bucket,
 		Spanner:   cfg.SpannerDbPath,
 	}
