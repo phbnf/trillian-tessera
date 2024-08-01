@@ -26,19 +26,21 @@ type Storage interface {
 	Add(context.Context, *ctonly.Entry) (uint64, error)
 }
 
-// ctStorage implements Storage
-type CtStorage struct {
+// CTStorage implements Storage
+type CTStorage struct {
 	StoreData func(context.Context, *ctonly.Entry) (uint64, error)
 	// TODO(phboneff): add storeExtraData
 	// TODO(phboneff): add dedupe
 }
 
-func NewCTSTorage(logStorage tessera.Storage) (*CtStorage, error) {
-	ctStorage := new(CtStorage)
+// NewStorage
+func NewCTSTorage(logStorage tessera.Storage) (*CTStorage, error) {
+	ctStorage := new(CTStorage)
 	ctStorage.StoreData = tessera.NewCertificateTransparencySequencedWriter(logStorage)
 	return ctStorage, nil
 }
 
-func (cts CtStorage) Add(ctx context.Context, entry *ctonly.Entry) (uint64, error) {
+func (cts CTStorage) Add(ctx context.Context, entry *ctonly.Entry) (uint64, error) {
+	// TODO(phboneff): add deduplication and chain storage
 	return cts.StoreData(ctx, entry)
 }
