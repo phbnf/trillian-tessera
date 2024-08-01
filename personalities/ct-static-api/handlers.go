@@ -353,7 +353,7 @@ func addChainInternal(ctx context.Context, li *logInfo, w http.ResponseWriter, r
 	}
 
 	// TODO(phboneff): edit log info
-	klog.V(2).Infof("%s: %s => grpc.QueueLeaves", li.LogOrigin, method)
+	klog.V(2).Infof("%s: %s => storage.Add", li.LogOrigin, method)
 	idx, err := li.storage.Add(ctx, entry)
 	if err != nil {
 		return http.StatusInternalServerError, fmt.Errorf("couldn't store the leaf")
