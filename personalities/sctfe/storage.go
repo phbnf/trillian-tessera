@@ -32,6 +32,7 @@ const (
 	// A CT log references ~15k unique issuer certifiates in 2024, so this gives plenty of space
 	// if we ever run into this limit, we should re-think how it works.
 	maxCachedIssuerKeys = 1 << 20
+	"golang.org/x/sync/errgroup"
 )
 
 // Storage provides all the storage primitives necessary to write to a ct-static-api log.
