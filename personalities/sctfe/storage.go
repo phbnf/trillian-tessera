@@ -17,6 +17,7 @@ package sctfe
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 
@@ -105,6 +106,24 @@ func (cts *CTStorage) AddIssuerChain(ctx context.Context, chain []*x509.Certific
 		return err
 	}
 	return nil
+}
+
+func (cts CTStorage) AddCertIndex(ctx context.Context, c *x509.Certificate, idx uint64) error {
+	key := sha256.Sum256(c.Raw)
+	idxb := binary.BigEndian.AppendUint64([]byte{}, idx)
+	if err := cts.crtIdxs.Add(ctx, key, idxb); err != nil {
+		return fmt.Errorf("error storing index %d of %q: %v", idx, hex.EncodeToString(key[:]), err)
+	}
+	return nil
+}
+
+func (cts CTStorage) GetCertIndex(ctx context.Context, c *x509.Certificate) (uint64, bool, error) {
+	key := sha256.Sum256(c.Raw)
+	idx, ok, err := cts.crtIdxs.Get(ctx, key)
+	if err != nil {
+		return 0, false, fmt.Errorf("error fetching index of %q: %v", hex.EncodeToString(key[:]), err)
+	}
+	return binary.BigEndian.Uint64(idx), ok, nil
 }
 
 // cachedIssuerStorage wraps an IssuerStorage, and keeps a local copy the keys it contains.
