@@ -320,17 +320,22 @@ func addChainInternal(ctx context.Context, li *logInfo, w http.ResponseWriter, r
 		return http.StatusBadRequest, fmt.Errorf("failed to build MerkleTreeLeaf: %s", err)
 	}
 
-	// TODO(phboneff): refactor entryFromChain to avoid recomputing hashes in AddIssuerChain
-	if len(chain) > 1 {
-		if err := li.storage.AddIssuerChain(ctx, chain[1:]); err != nil {
-			return http.StatusInternalServerError, fmt.Errorf("failed to store issuer chain: %s", err)
-		}
-	}
+	// TODO(phboneff): check if want to store the chain, even if we don't re-log the leaf to get potential other paths
+	idx, ok, err := li.storage.GetCertIndex(ctx, chain[0])
+	if !ok {
 
-	klog.V(2).Infof("%s: %s => storage.Add", li.LogOrigin, method)
-	idx, err := li.storage.Add(ctx, entry)
-	if err != nil {
-		return http.StatusInternalServerError, fmt.Errorf("couldn't store the leaf")
+		// TODO(phboneff): refactor entryFromChain to avoid recomputing hashes in AddIssuerChain
+		if len(chain) > 1 {
+			if err := li.storage.AddIssuerChain(ctx, chain[1:]); err != nil {
+				return http.StatusInternalServerError, fmt.Errorf("failed to store issuer chain: %s", err)
+			}
+		}
+
+		klog.V(2).Infof("%s: %s => storage.Add", li.LogOrigin, method)
+		idx, err = li.storage.Add(ctx, entry)
+		if err != nil {
+			return http.StatusInternalServerError, fmt.Errorf("couldn't store the leaf")
+		}
 	}
 
 	// Always use the returned leaf as the basis for an SCT.
@@ -364,6 +369,9 @@ func addChainInternal(ctx context.Context, li *logInfo, w http.ResponseWriter, r
 	if sct.Timestamp == timeMillis {
 		lastSCTTimestamp.Set(float64(sct.Timestamp), li.LogOrigin)
 	}
+
+	// TODO(phboneff): move this arround / make better
+	go li.storage.AddCertIndex(ctx, chain[0], idx)
 
 	return http.StatusOK, nil
 }
