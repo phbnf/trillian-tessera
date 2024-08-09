@@ -366,6 +366,14 @@ func addChainInternal(ctx context.Context, li *logInfo, w http.ResponseWriter, r
 		lastSCTTimestamp.Set(float64(sct.Timestamp), li.LogOrigin)
 	}
 
+	// TODO(phboneff): move this arround / make better
+	go func() {
+		err := li.storage.AddCertIndex(context.TODO(), chain[0], idx)
+		if err != nil {
+			klog.Warningf("failed to store certificate index: %v", err)
+		}
+	}()
+
 	return http.StatusOK, nil
 }
 
