@@ -49,6 +49,10 @@ type Storage interface {
 	Add(context.Context, *ctonly.Entry) (uint64, error)
 	// AddIssuerChain stores every the chain certificate in a content-addressable store under their sha256 hash.
 	AddIssuerChain(context.Context, []*x509.Certificate) error
+	// AddCertIndex stores the index of certificate in a content-addressable store.
+	AddCertIndex(context.Context, *x509.Certificate, uint64) error
+	// GetCertIndex gets the index of certificate from a content-addressable store.
+	GetCertIndex(context.Context, *x509.Certificate) (uint64, bool, error)
 }
 
 type KV struct {
@@ -59,6 +63,11 @@ type KV struct {
 // IssuerStorage issuer certificates under their hex encoded sha256.
 type IssuerStorage interface {
 	AddIssuersIfNotExist(ctx context.Context, kv []KV) error
+}
+
+type CertIndexStorage interface {
+	Add(ctx context.Context, key [32]byte, data []byte) error
+	Get(ctx context.Context, key [32]byte) ([]byte, bool, error)
 }
 
 // CTStorage implements Storage.
