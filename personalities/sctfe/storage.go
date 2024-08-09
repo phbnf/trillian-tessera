@@ -60,13 +60,15 @@ type CertIndexStorage interface {
 type CTStorage struct {
 	storeData func(context.Context, *ctonly.Entry) (uint64, error)
 	issuers   IssuerStorage
+	crtIdxs   CertIndexStorage
 }
 
 // NewCTStorage instantiates a CTStorage object.
-func NewCTSTorage(logStorage tessera.Storage, issuerStorage IssuerStorage) (*CTStorage, error) {
+func NewCTSTorage(logStorage tessera.Storage, issuerStorage IssuerStorage, certIdxStorage CertIndexStorage) (*CTStorage, error) {
 	ctStorage := &CTStorage{
 		storeData: tessera.NewCertificateTransparencySequencedWriter(logStorage),
 		issuers:   NewCachedIssuerStorage(issuerStorage),
+		crtIdxs:   certIdxStorage,
 	}
 	return ctStorage, nil
 }
