@@ -283,5 +283,11 @@ func newGCPStorage(ctx context.Context, vCfg *sctfe.ValidatedLogConfig, signer n
 	if err != nil {
 		return nil, fmt.Errorf("Failed to initialize GCP issuer storage: %v", err)
 	}
-	return sctfe.NewCTSTorage(tesseraStorage, issuerStorage)
+
+	crtIdxStorage, err := gcpMap.NewGCSStorage(ctx, cfg.ProjectId, cfg.Bucket, "dedup/", "")
+	if err != nil {
+		return nil, fmt.Errorf("Failed to initialize GCP issuer storage: %v", err)
+	}
+
+	return sctfe.NewCTSTorage(tesseraStorage, issuerStorage, crtIdxStorage)
 }
