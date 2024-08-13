@@ -308,5 +308,6 @@ func newGCPStorage(ctx context.Context, vCfg *sctfe.ValidatedLogConfig, signer n
 		return nil, fmt.Errorf("Failed to initialize GCP issuer storage: %v", err)
 	}
 
-	return sctfe.NewCTSTorage(tesseraStorage, issuerStorage, crtIdxStorage)
+	
+	return sctfe.NewCTSTorage(tesseraStorage, issuerStorage, sctfe.NewGlobalBestEffortDedup(crtIdxStorage))
 }

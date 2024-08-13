@@ -53,8 +53,33 @@ type IssuerStorage interface {
 }
 
 type CertIndexStorage interface {
+	Add(ctx context.Context, key [32]byte, idx uint64) error
+	Get(ctx context.Context, key [32]byte) (uint64, bool, error)
+}
+
+// GlobalBestEffortDedup implements CertIndexStorage.
+type GlobalBestEffortDedup struct {
+	kv KV
+}
+
+type KV interface {
 	Add(ctx context.Context, key [32]byte, data []byte) error
 	Get(ctx context.Context, key [32]byte) ([]byte, bool, error)
+}
+
+func NewGlobalBestEffortDedup(kv KV) GlobalBestEffortDedup {
+	return GlobalBestEffortDedup{}
+}
+
+func (d GlobalBestEffortDedup) Add(ctx context.Context, key [32]byte, idx uint64) error {
+	idxb := binary.BigEndian.AppendUint64([]byte{}, idx)
+	return d.kv.Add(ctx, key, idxb)
+}
+
+func (d GlobalBestEffortDedup) Get(ctx context.Context, key [32]byte) (uint64, error) {
+	idxb, _, err := d.kv.Get(ctx, key)
+	idx := binary.BigEndian.Uint64(idxb)
+	return idx, err
 }
 
 // CTStorage implements Storage.
@@ -110,8 +135,7 @@ func (cts *CTStorage) AddIssuerChain(ctx context.Context, chain []*x509.Certific
 
 func (cts CTStorage) AddCertIndex(ctx context.Context, c *x509.Certificate, idx uint64) error {
 	key := sha256.Sum256(c.Raw)
-	idxb := binary.BigEndian.AppendUint64([]byte{}, idx)
-	if err := cts.crtIdxs.Add(ctx, key, idxb); err != nil {
+	if err := cts.crtIdxs.Add(ctx, key, idx); err != nil {
 		return fmt.Errorf("error storing index %d of %q: %v", idx, hex.EncodeToString(key[:]), err)
 	}
 	return nil
@@ -123,7 +147,7 @@ func (cts CTStorage) GetCertIndex(ctx context.Context, c *x509.Certificate) (uin
 	if err != nil {
 		return 0, false, fmt.Errorf("error fetching index of %q: %v", hex.EncodeToString(key[:]), err)
 	}
-	return binary.BigEndian.Uint64(idx), ok, nil
+	return idx, ok, nil
 }
 
 // cachedIssuerStorage wraps an IssuerStorage, and keeps a local copy the keys it contains.
