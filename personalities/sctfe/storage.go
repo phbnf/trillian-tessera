@@ -19,10 +19,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"time"
 
 	"github.com/google/certificate-transparency-go/x509"
 	tessera "github.com/transparency-dev/trillian-tessera"
+	"github.com/transparency-dev/trillian-tessera/client"
 	"github.com/transparency-dev/trillian-tessera/ctonly"
+	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/klog/v2"
 )
@@ -172,4 +175,65 @@ func NewCachedIssuerStorage(s IssuerStorage) cachedIssuerStorage {
 	c := cachedIssuerStorage{s: s, N: maxCachedIssuerKeys}
 	c.m = make(map[string]bool)
 	return c
+}
+
+type LocalDedupStorage interface {
+	Add(ctx context.Context, leafID [32]byte, idx uint64) error
+	Get(ctx context.Context, leafID [32]byte) (uint64, bool, error)
+	LogSize(ctx context.Context) (uint64, error) // returns the largest idx Add has successfully been called with
+	SetLogSize(ctx context.Context, idx uint64) error
+}
+
+type LocalBesEffortDedup struct {
+	CertIndexStorage
+	LogSize    func(context.Context) (uint64, error)
+	SetLogSize func(context.Context, uint64) error
+	fetcher    client.Fetcher
+}
+
+func NewLocalBestEffortDedup(ctx context.Context, lds LocalDedupStorage, t time.Duration, f client.Fetcher, v note.Verifier, origin string) LocalBesEffortDedup {
+	ret := LocalBesEffortDedup{CertIndexStorage: lds}
+	tck := time.NewTicker(t)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tck.C:
+				if err := ret.sync(ctx, origin, v); err != nil {
+					klog.Warningf("error updating deduplication data")
+				}
+			}
+		}
+	}()
+	return ret
+}
+
+func (d *LocalBesEffortDedup) sync(ctx context.Context, origin string, v note.Verifier) error {
+	ckpt, _, _, err := client.FetchCheckpoint(ctx, d.fetcher, v, origin)
+	oldSize, err := d.LogSize(ctx)
+	if err != nil {
+		return fmt.Errorf("OldSize(): %v", err)
+	}
+	// TODO(phboneff): add parallelism
+	if ckpt.Size > oldSize {
+		for i := oldSize / 8; i <= ckpt.Size/8; i++ {
+			b, err := client.GetEntryBundle(ctx, d.fetcher, i, ckpt.Size)
+			if err != nil {
+				return fmt.Errorf("client.GetEntryBundle(): %v", err)
+			}
+			for k, e := range b.Entries {
+				key := sha256.Sum256(e) // TODO(phboneff): PARSE THE CT ENTRY HERE
+				idx := i*8 + uint64(k)
+				err := d.Add(ctx, key, idx)
+				if err != nil {
+					return fmt.Errorf("error storing deduplication index %d for entry %q", idx, hex.EncodeToString(key[:]))
+				}
+			}
+			if err := d.SetLogSize(ctx, ckpt.Size); err != nil {
+				return fmt.Errorf("error storing checkpoint size: %v", err)
+			}
+		}
+	}
+	return nil
 }
