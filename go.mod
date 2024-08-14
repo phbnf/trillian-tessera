@@ -38,6 +38,23 @@ require (
 	cloud.google.com/go/monitoring v1.20.3 // indirect
 	cloud.google.com/go/trace v1.10.11 // indirect
 	contrib.go.opencensus.io/exporter/stackdriver v0.13.14 // indirect
+	github.com/aws/aws-sdk-go v1.46.4 // indirect
+	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/cisco/go-tls-syntax v0.0.0-20200617162716-46b0cfb76b9b // indirect
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
+	github.com/letsencrypt/pkcs11key/v4 v4.0.0 // indirect
+	github.com/miekg/pkcs11 v1.1.1 // indirect
+	github.com/prometheus/client_model v0.5.0 // indirect
+	github.com/prometheus/common v0.48.0 // indirect
+	github.com/prometheus/procfs v0.12.0 // indirect
+	github.com/prometheus/prometheus v0.47.2 // indirect
+)
+
+require (
+	cloud.google.com/go/auth/oauth2adapt v0.2.3 // indirect
+	cloud.google.com/go/compute/metadata v0.5.0 // indirect
+	cloud.google.com/go/iam v1.1.12 // indirect
+	cloud.google.com/go/longrunning v0.5.11 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/GoogleCloudPlatform/grpc-gcp-go/grpcgcp v1.5.0 // indirect
 	github.com/aws/aws-sdk-go v1.46.4 // indirect

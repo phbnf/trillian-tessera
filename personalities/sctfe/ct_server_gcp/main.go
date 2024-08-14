@@ -43,9 +43,11 @@ import (
 	tessera "github.com/transparency-dev/trillian-tessera"
 	"github.com/transparency-dev/trillian-tessera/personalities/sctfe"
 	"github.com/transparency-dev/trillian-tessera/personalities/sctfe/configpb"
+	"github.com/transparency-dev/trillian-tessera/personalities/sctfe/storage/bbolt"
 	gcpSCTFE "github.com/transparency-dev/trillian-tessera/personalities/sctfe/storage/gcp"
 	gcpTessera "github.com/transparency-dev/trillian-tessera/storage/gcp"
 	"golang.org/x/mod/sumdb/note"
+
 	"google.golang.org/protobuf/proto"
 	"k8s.io/klog/v2"
 )
@@ -284,10 +286,28 @@ func newGCPStorage(ctx context.Context, vCfg *sctfe.ValidatedLogConfig, signer n
 		return nil, fmt.Errorf("Failed to initialize GCP issuer storage: %v", err)
 	}
 
-	crtIdxStorage, err := gcpSCTFE.NewDedupStorage(ctx, cfg.ProjectId, cfg.Bucket, "dedup/", "")
+	dedupStorage, err := bbolt.NewStorage("test.db")
 	if err != nil {
-		return nil, fmt.Errorf("Failed to initialize GCP issuer storage: %v", err)
+		return nil, fmt.Errorf("failed to initialize BBolt deduplication database")
 	}
 
-	return sctfe.NewCTSTorage(tesseraStorage, issuerStorage, crtIdxStorage)
+	fetcher, err := gcpSCTFE.GetFetcher(ctx, cfg.Bucket)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get a log fetcher")
+	}
+
+	verifierString, err := tdnote.RFC6962VerifierString(vCfg.Config.Origin, vCfg.PubKey)
+	if err != nil {
+		return nil, fmt.Errorf("error creating static-ct-api checkpoint verifier string: %v", err)
+
+	}
+	verifier, err := tdnote.NewRFC6962Verifier(verifierString)
+	if err != nil {
+		return nil, fmt.Errorf("error creating static-ct-api checkpoint verifier: %v", err)
+
+	}
+
+	localDedup := sctfe.NewLocalBestEffortDedup(ctx, dedupStorage, time.Second, fetcher, verifier, vCfg.Config.Origin)
+
+	return sctfe.NewCTSTorage(tesseraStorage, issuerStorage, localDedup)
 }
