@@ -52,7 +52,9 @@ func NewStorage(path string) (*Storage, error) {
 	err = db.Update(func(tx *bolt.Tx) error {
 		dedupB := tx.Bucket([]byte(dedupBucket))
 		sizeB := tx.Bucket([]byte(sizeBucket))
+		fmt.Println("hello form inside")
 		if dedupB == nil && sizeB == nil {
+			fmt.Println("wil create buckets")
 			_, err := tx.CreateBucket([]byte(dedupBucket))
 			if err != nil {
 				return fmt.Errorf("create %q bucket: %v", dedupBucket, err)
@@ -61,8 +63,10 @@ func NewStorage(path string) (*Storage, error) {
 			if err != nil {
 				return fmt.Errorf("create %q bucket: %v", sizeBucket, err)
 			}
+			fmt.Println("did create buckets")
 			// TODO(phboneff): fix contexts everywhere. Do we need them?
 			s.SetLogSize(context.TODO(), 0)
+			fmt.Println("did set logsize")
 			klog.Infof("will try to read logsize")
 			s, err := s.LogSize(context.TODO())
 			if err != nil {
@@ -80,6 +84,7 @@ func NewStorage(path string) (*Storage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error initializing buckets: %v", err)
 	}
+	fmt.Println("done initialiing db")
 
 	return s, nil
 }
