@@ -20,6 +20,7 @@ package gcp
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"path"
 
@@ -85,6 +86,23 @@ func (s *GCSStorage) Exists(ctx context.Context, key []byte) (bool, error) {
 	}
 	klog.V(2).Infof("Exists: object %q already exists in bucket %q", objName, s.bucket.BucketName())
 	return true, nil
+}
+
+// Get fetches an object stored under key.
+func (s GCSStorage) Get(ctx context.Context, key [32]byte) ([]byte, bool, error) {
+	objName := s.keyToObjName(key)
+	r, err := s.bucket.Object(objName).NewReader(ctx)
+	if err != nil {
+		return nil, false, fmt.Errorf("Get: failed to create reader for object %q in bucket %q: %w", objName, s.bucket.BucketName(), err)
+	}
+
+	d, err := io.ReadAll(r)
+	if err == gcs.ErrObjectNotExist {
+		return nil, false, nil
+	} else if err != nil {
+		return nil, false, fmt.Errorf("failed to read %q: %v", objName, err)
+	}
+	return d, true, r.Close()
 }
 
 // Add stores the provided data under key.
