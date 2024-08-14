@@ -40,7 +40,7 @@ type Storage struct {
 	db *bolt.DB
 }
 
-func NewStorage(path string) (*Storage, error) {
+func NewStorage(ctx context.Context, path string) (*Storage, error) {
 	fmt.Println("HEEEEEEEEELLLLLLLLLLOOOOOOOOOOOO")
 	db, err := bolt.Open(path, 0600, nil)
 	if err != nil {
@@ -65,10 +65,10 @@ func NewStorage(path string) (*Storage, error) {
 			}
 			fmt.Println("did create buckets")
 			// TODO(phboneff): fix contexts everywhere. Do we need them?
-			s.SetLogSize(context.TODO(), 0)
+			s.SetLogSize(ctx, 0)
 			fmt.Println("did set logsize")
 			klog.Infof("will try to read logsize")
-			s, err := s.LogSize(context.TODO())
+			s, err := s.LogSize(ctx)
 			if err != nil {
 				return fmt.Errorf("error reading logsize: %v", err)
 			}
