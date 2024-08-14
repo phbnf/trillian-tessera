@@ -59,13 +59,16 @@ func NewStorage(ctx context.Context, path string) (*Storage, error) {
 			if err != nil {
 				return fmt.Errorf("create %q bucket: %v", dedupBucket, err)
 			}
-			_, err = tx.CreateBucket([]byte(sizeBucket))
+			sb, err := tx.CreateBucket([]byte(sizeBucket))
 			if err != nil {
 				return fmt.Errorf("create %q bucket: %v", sizeBucket, err)
 			}
 			fmt.Println("did create buckets")
 			// TODO(phboneff): fix contexts everywhere. Do we need them?
-			//s.SetLogSize(ctx, 0)
+			//		s.SetLogSize(ctx, 0)
+
+			x := sb.Put([]byte("size"), itob(0))
+			fmt.Println(x)
 			fmt.Println("did set logsize")
 			klog.Infof("will try to read logsize")
 			size, err := s.LogSize(ctx)
@@ -77,6 +80,13 @@ func NewStorage(ctx context.Context, path string) (*Storage, error) {
 			return fmt.Errorf("inconsistent deduplication storage state %q is nil but %q it not nil", dedupBucket, sizeBucket)
 		} else if dedupB != nil && sizeB == nil {
 			return fmt.Errorf("inconsistent deduplication storage state, %q is not nil but %q is nil", dedupBucket, sizeBucket)
+		} else {
+			size, err := s.LogSize(ctx)
+			if err != nil {
+				return fmt.Errorf("error reading logsize: %v", err)
+			}
+			klog.Infof("%d", size)
+
 		}
 		return nil
 	})
