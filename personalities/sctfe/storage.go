@@ -191,8 +191,8 @@ type LocalBesEffortDedup struct {
 	fetcher    client.Fetcher
 }
 
-func NewLocalBestEffortDedup(ctx context.Context, lds LocalDedupStorage, t time.Duration, f client.Fetcher, v note.Verifier, origin string) LocalBesEffortDedup {
-	ret := LocalBesEffortDedup{CertIndexStorage: lds}
+func NewLocalBestEffortDedup(ctx context.Context, lds LocalDedupStorage, t time.Duration, f client.Fetcher, v note.Verifier, origin string) *LocalBesEffortDedup {
+	ret := &LocalBesEffortDedup{CertIndexStorage: lds}
 	go func() {
 		tck := time.NewTicker(t)
 		defer tck.Stop()
