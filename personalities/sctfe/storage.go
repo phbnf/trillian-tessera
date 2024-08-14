@@ -193,8 +193,9 @@ type LocalBesEffortDedup struct {
 
 func NewLocalBestEffortDedup(ctx context.Context, lds LocalDedupStorage, t time.Duration, f client.Fetcher, v note.Verifier, origin string) LocalBesEffortDedup {
 	ret := LocalBesEffortDedup{CertIndexStorage: lds}
-	tck := time.NewTicker(t)
 	go func() {
+		tck := time.NewTicker(t)
+		defer tck.Stop()
 		for {
 			select {
 			case <-ctx.Done():
