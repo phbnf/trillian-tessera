@@ -44,6 +44,7 @@ func NewStorage(path string) (*Storage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("bolt.Open(): %v", err)
 	}
+	s := &Storage{db: db}
 
 	err = db.Update(func(tx *bolt.Tx) error {
 		dedupB := tx.Bucket([]byte(dedupBucket))
@@ -59,6 +60,8 @@ func NewStorage(path string) (*Storage, error) {
 			if err != nil {
 				return fmt.Errorf("create %q bucket: %v", sizeBucket, err)
 			}
+			// TODO(phboneff): fix contexts everywhere. Do we need them?
+			s.SetLogSize(context.TODO(), 0)
 		}
 		return nil
 	})
@@ -67,7 +70,7 @@ func NewStorage(path string) (*Storage, error) {
 		return nil, fmt.Errorf("error initializing buckets: %v", err)
 	}
 
-	return &Storage{db: db}, nil
+	return s, nil
 }
 
 func (s *Storage) Add(ctx context.Context, leafID [32]byte, idx uint64) error {
@@ -78,10 +81,10 @@ func (s *Storage) Add(ctx context.Context, leafID [32]byte, idx uint64) error {
 }
 
 func (s *Storage) Get(ctx context.Context, leafID [32]byte) (uint64, bool, error) {
-	var v []byte
+	v := make([]byte, 8)
 	_ = s.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(dedupBucket))
-		v = b.Get(leafID[:])
+		copy(v, b.Get(leafID[:]))
 		return nil
 	})
 	if v == nil {
@@ -91,10 +94,10 @@ func (s *Storage) Get(ctx context.Context, leafID [32]byte) (uint64, bool, error
 }
 
 func (s *Storage) LogSize(ctx context.Context) (uint64, error) {
-	var v []byte
-	s.db.View(func(tx *bolt.Tx) error {
+	v := make([]byte, 8)
+	_ = s.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(sizeBucket))
-		v = b.Get([]byte("size"))
+		copy(v, b.Get([]byte("size")))
 		return nil
 	})
 	if v == nil {
