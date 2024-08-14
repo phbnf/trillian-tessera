@@ -23,6 +23,7 @@ import (
 	"fmt"
 
 	bolt "go.etcd.io/bbolt"
+	"k8s.io/klog/v2"
 )
 
 var (
@@ -40,6 +41,7 @@ type Storage struct {
 }
 
 func NewStorage(path string) (*Storage, error) {
+	fmt.Println("HEEEEEEEEELLLLLLLLLLOOOOOOOOOOOO")
 	db, err := bolt.Open(path, 0600, nil)
 	if err != nil {
 		return nil, fmt.Errorf("bolt.Open(): %v", err)
@@ -62,6 +64,12 @@ func NewStorage(path string) (*Storage, error) {
 			}
 			// TODO(phboneff): fix contexts everywhere. Do we need them?
 			s.SetLogSize(context.TODO(), 0)
+			klog.Infof("will try to read logsize")
+			s, err := s.LogSize(context.TODO())
+			if err != nil {
+				return fmt.Errorf("error reading logsize: %v", err)
+			}
+			klog.Infof("%d", s)
 		}
 		return nil
 	})
