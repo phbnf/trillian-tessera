@@ -23,6 +23,7 @@ import (
 	"fmt"
 
 	bolt "go.etcd.io/bbolt"
+	"k8s.io/klog/v2"
 )
 
 var (
@@ -39,26 +40,38 @@ type Storage struct {
 	db *bolt.DB
 }
 
-func NewStorage(path string) (*Storage, error) {
+func NewStorage(ctx context.Context, path string) (*Storage, error) {
 	db, err := bolt.Open(path, 0600, nil)
 	if err != nil {
 		return nil, fmt.Errorf("bolt.Open(): %v", err)
 	}
+	fmt.Println("Created a DB")
+	s := &Storage{db: db}
 
 	err = db.Update(func(tx *bolt.Tx) error {
 		dedupB := tx.Bucket([]byte(dedupBucket))
 		sizeB := tx.Bucket([]byte(sizeBucket))
 		if dedupB == nil && sizeB == nil {
-			return nil
-		} else if dedupB != nil && sizeB != nil {
+			klog.V(2).Infof("no pre-existing buckets, will create %q and %q.", dedupBucket, sizeBucket)
 			_, err := tx.CreateBucket([]byte(dedupBucket))
 			if err != nil {
 				return fmt.Errorf("create %q bucket: %v", dedupBucket, err)
 			}
-			_, err = tx.CreateBucket([]byte(sizeBucket))
+			sb, err := tx.CreateBucket([]byte(sizeBucket))
 			if err != nil {
 				return fmt.Errorf("create %q bucket: %v", sizeBucket, err)
 			}
+			klog.V(2).Infof("initializing %q with size 0.", sizeBucket)
+			err = sb.Put([]byte("size"), itob(0))
+			if err != nil {
+				return fmt.Errorf("error reading logsize: %v", err)
+			}
+		} else if dedupB == nil && sizeB != nil {
+			return fmt.Errorf("inconsistent deduplication storage state %q is nil but %q it not nil", dedupBucket, sizeBucket)
+		} else if dedupB != nil && sizeB == nil {
+			return fmt.Errorf("inconsistent deduplication storage state, %q is not nil but %q is nil", dedupBucket, sizeBucket)
+		} else {
+			klog.V(2).Infof("found pre-existing %q and %q buckets.", dedupBucket, sizeBucket)
 		}
 		return nil
 	})
@@ -67,7 +80,7 @@ func NewStorage(path string) (*Storage, error) {
 		return nil, fmt.Errorf("error initializing buckets: %v", err)
 	}
 
-	return &Storage{db: db}, nil
+	return s, nil
 }
 
 func (s *Storage) Add(ctx context.Context, leafID [32]byte, idx uint64) error {
@@ -78,10 +91,10 @@ func (s *Storage) Add(ctx context.Context, leafID [32]byte, idx uint64) error {
 }
 
 func (s *Storage) Get(ctx context.Context, leafID [32]byte) (uint64, bool, error) {
-	var v []byte
+	v := make([]byte, 8)
 	_ = s.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(dedupBucket))
-		v = b.Get(leafID[:])
+		copy(v, b.Get(leafID[:]))
 		return nil
 	})
 	if v == nil {
@@ -91,10 +104,10 @@ func (s *Storage) Get(ctx context.Context, leafID [32]byte) (uint64, bool, error
 }
 
 func (s *Storage) LogSize(ctx context.Context) (uint64, error) {
-	var v []byte
-	_ = s.db.View(func(tx *bolt.Tx) error {
+	v := make([]byte, 8)
+	err := s.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(sizeBucket))
-		v = b.Get([]byte("size"))
+		copy(v, b.Get([]byte("size")))
 		return nil
 	})
 	if v == nil {
@@ -104,10 +117,11 @@ func (s *Storage) LogSize(ctx context.Context) (uint64, error) {
 }
 
 func (s *Storage) SetLogSize(ctx context.Context, size uint64) error {
-	return s.db.Update(func(tx *bolt.Tx) error {
+	err := s.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(dedupBucket))
 		return b.Put([]byte("size"), itob(size))
 	})
+	return err
 }
 
 // itob returns an 8-byte big endian representation of idx.
