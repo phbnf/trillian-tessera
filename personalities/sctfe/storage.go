@@ -17,7 +17,6 @@ package sctfe
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"sync"
@@ -69,31 +68,6 @@ type IssuerStorage interface {
 type CertIndexStorage interface {
 	Add(ctx context.Context, key [32]byte, idx uint64) error
 	Get(ctx context.Context, key [32]byte) (uint64, bool, error)
-}
-
-// GlobalBestEffortDedup implements CertIndexStorage.
-type GlobalBestEffortDedup struct {
-	kv KV
-}
-
-type KV interface {
-	Add(ctx context.Context, key [32]byte, data []byte) error
-	Get(ctx context.Context, key [32]byte) ([]byte, bool, error)
-}
-
-func NewGlobalBestEffortDedup(kv KV) GlobalBestEffortDedup {
-	return GlobalBestEffortDedup{}
-}
-
-func (d GlobalBestEffortDedup) Add(ctx context.Context, key [32]byte, idx uint64) error {
-	idxb := binary.BigEndian.AppendUint64([]byte{}, idx)
-	return d.kv.Add(ctx, key, idxb)
-}
-
-func (d GlobalBestEffortDedup) Get(ctx context.Context, key [32]byte) (uint64, error) {
-	idxb, _, err := d.kv.Get(ctx, key)
-	idx := binary.BigEndian.Uint64(idxb)
-	return idx, err
 }
 
 // CTStorage implements Storage.

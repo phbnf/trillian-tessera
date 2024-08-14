@@ -43,7 +43,7 @@ import (
 	tessera "github.com/transparency-dev/trillian-tessera"
 	"github.com/transparency-dev/trillian-tessera/personalities/sctfe"
 	"github.com/transparency-dev/trillian-tessera/personalities/sctfe/configpb"
-	gcpMap "github.com/transparency-dev/trillian-tessera/personalities/sctfe/storage/gcp"
+	gcpSCTFE "github.com/transparency-dev/trillian-tessera/personalities/sctfe/storage/gcp"
 	gcpTessera "github.com/transparency-dev/trillian-tessera/storage/gcp"
 	"golang.org/x/mod/sumdb/note"
 	"google.golang.org/protobuf/proto"
@@ -279,16 +279,15 @@ func newGCPStorage(ctx context.Context, vCfg *sctfe.ValidatedLogConfig, signer n
 		return nil, fmt.Errorf("Failed to initialize GCP Tessera storage: %v", err)
 	}
 
-	issuerStorage, err := gcpMap.NewIssuerStorage(ctx, cfg.ProjectId, cfg.Bucket, "fingerprints/", "application/pkix-cert")
+	issuerStorage, err := gcpSCTFE.NewIssuerStorage(ctx, cfg.ProjectId, cfg.Bucket, "fingerprints/", "application/pkix-cert")
 	if err != nil {
 		return nil, fmt.Errorf("Failed to initialize GCP issuer storage: %v", err)
 	}
 
-	crtIdxStorage, err := gcpMap.NewGCSStorage(ctx, cfg.ProjectId, cfg.Bucket, "dedup/", "")
+	crtIdxStorage, err := gcpSCTFE.NewGlobalBestEffortDedup(ctx, cfg.ProjectId, cfg.Bucket, "dedup/", "")
 	if err != nil {
 		return nil, fmt.Errorf("Failed to initialize GCP issuer storage: %v", err)
 	}
 
-	
-	return sctfe.NewCTSTorage(tesseraStorage, issuerStorage, sctfe.NewGlobalBestEffortDedup(crtIdxStorage))
+	return sctfe.NewCTSTorage(tesseraStorage, issuerStorage, crtIdxStorage)
 }
