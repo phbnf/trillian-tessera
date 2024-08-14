@@ -213,6 +213,8 @@ func NewLocalBestEffortDedup(ctx context.Context, lds LocalDedupStorage, t time.
 func (d *LocalBesEffortDedup) sync(ctx context.Context, origin string, v note.Verifier) error {
 	ckpt, _, _, err := client.FetchCheckpoint(ctx, d.fetcher, v, origin)
 	oldSize, err := d.LogSize(ctx)
+	fmt.Printf("this is logsize %d", oldSize)
+	fmt.Printf("this is ckpt %+v", *ckpt)
 	if err != nil {
 		return fmt.Errorf("OldSize(): %v", err)
 	}

@@ -25,11 +25,13 @@ import (
 
 // GetFetcher returns a GCS read function for objects in a given bucket
 func GetFetcher(ctx context.Context, bucket string) (func(ctx context.Context, path string) ([]byte, error), error) {
+	fmt.Println("Hello I'm going to create ac lient")
 	c, err := gcs.NewClient(ctx, gcs.WithJSONReads())
 	if err != nil {
 		return func(context.Context, string) ([]byte, error) { return nil, nil }, nil
 	}
 	return func(ctx context.Context, path string) ([]byte, error) {
+		fmt.Println("Hello I'm going to read")
 		r, err := c.Bucket(bucket).Object(path).NewReader(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("getObject: failed to create reader for object %q in bucket %q: %w", path, bucket, err)
@@ -39,6 +41,7 @@ func GetFetcher(ctx context.Context, bucket string) (func(ctx context.Context, p
 		if err != nil {
 			return nil, fmt.Errorf("failed to read %q: %v", path, err)
 		}
+		fmt.Println("Hello I'm done reading")
 		return d, r.Close()
 	}, nil
 }
