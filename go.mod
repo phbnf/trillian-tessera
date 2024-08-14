@@ -36,6 +36,7 @@ require (
 	contrib.go.opencensus.io/exporter/stackdriver v0.13.14 // indirect
 	github.com/aws/aws-sdk-go v1.46.4 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/cisco/go-tls-syntax v0.0.0-20200617162716-46b0cfb76b9b // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/letsencrypt/pkcs11key/v4 v4.0.0 // indirect
 	github.com/miekg/pkcs11 v1.1.1 // indirect
