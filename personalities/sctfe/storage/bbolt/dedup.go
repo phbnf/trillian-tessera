@@ -68,11 +68,11 @@ func NewStorage(ctx context.Context, path string) (*Storage, error) {
 			//s.SetLogSize(ctx, 0)
 			fmt.Println("did set logsize")
 			klog.Infof("will try to read logsize")
-			s, err := s.LogSize(ctx)
+			size, err := s.LogSize(ctx)
 			if err != nil {
 				return fmt.Errorf("error reading logsize: %v", err)
 			}
-			klog.Infof("%d", s)
+			klog.Infof("%d", size)
 		} else if dedupB == nil && sizeB != nil {
 			return fmt.Errorf("inconsistent deduplication storage state %q is nil but %q it not nil", dedupBucket, sizeBucket)
 		} else if dedupB != nil && sizeB == nil {
