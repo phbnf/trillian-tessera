@@ -112,12 +112,15 @@ func (s *Storage) Get(ctx context.Context, leafID [32]byte) (uint64, bool, error
 func (s *Storage) LogSize(ctx context.Context) (uint64, error) {
 	fmt.Println("Hello from logsize")
 	v := make([]byte, 8)
-	_ = s.db.View(func(tx *bolt.Tx) error {
+	err := s.db.View(func(tx *bolt.Tx) error {
 		fmt.Println("hello from inside LogSize")
 		b := tx.Bucket([]byte(sizeBucket))
 		copy(v, b.Get([]byte("size")))
 		return nil
 	})
+	if err != nil {
+		return 0, fmt.Errorf("error reading from %q: %v", sizeBucket, err)
+	}
 	if v == nil {
 		return 0, fmt.Errorf("can't find log size in bucket %q", sizeBucket)
 	}
