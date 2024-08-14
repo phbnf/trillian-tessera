@@ -92,7 +92,7 @@ func (s *Storage) Get(ctx context.Context, leafID [32]byte) (uint64, bool, error
 
 func (s *Storage) LogSize(ctx context.Context) (uint64, error) {
 	var v []byte
-	_ = s.db.View(func(tx *bolt.Tx) error {
+	s.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(sizeBucket))
 		v = b.Get([]byte("size"))
 		return nil
