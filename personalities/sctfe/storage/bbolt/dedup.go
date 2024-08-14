@@ -110,6 +110,9 @@ func (s *Storage) LogSize(ctx context.Context) (uint64, error) {
 		copy(v, b.Get([]byte("size")))
 		return nil
 	})
+	if err != nil {
+		return 0, fmt.Errorf("error reading from %q: %v", sizeBucket, err)
+	}
 	if v == nil {
 		return 0, fmt.Errorf("can't find log size in bucket %q", sizeBucket)
 	}
