@@ -65,7 +65,7 @@ func NewStorage(ctx context.Context, path string) (*Storage, error) {
 			}
 			fmt.Println("did create buckets")
 			// TODO(phboneff): fix contexts everywhere. Do we need them?
-			s.SetLogSize(ctx, 0)
+			//s.SetLogSize(ctx, 0)
 			fmt.Println("did set logsize")
 			klog.Infof("will try to read logsize")
 			s, err := s.LogSize(ctx)
@@ -110,8 +110,10 @@ func (s *Storage) Get(ctx context.Context, leafID [32]byte) (uint64, bool, error
 }
 
 func (s *Storage) LogSize(ctx context.Context) (uint64, error) {
+	fmt.Println("Hello from logsize")
 	v := make([]byte, 8)
 	_ = s.db.View(func(tx *bolt.Tx) error {
+		fmt.Println("hello from inside LogSize")
 		b := tx.Bucket([]byte(sizeBucket))
 		copy(v, b.Get([]byte("size")))
 		return nil
@@ -123,10 +125,16 @@ func (s *Storage) LogSize(ctx context.Context) (uint64, error) {
 }
 
 func (s *Storage) SetLogSize(ctx context.Context, size uint64) error {
-	return s.db.Update(func(tx *bolt.Tx) error {
+	fmt.Println("Hello from SetLogSize")
+	x := s.db.Update(func(tx *bolt.Tx) error {
+		fmt.Println("Hello from insindesinde1")
 		b := tx.Bucket([]byte(dedupBucket))
+		fmt.Println("Hello from insindesinde2")
 		return b.Put([]byte("size"), itob(size))
 	})
+	fmt.Println("Done calling SetLogSize")
+	fmt.Println(x)
+	return x
 }
 
 // itob returns an 8-byte big endian representation of idx.
