@@ -18,14 +18,19 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"math"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/google/certificate-transparency-go/x509"
 	tessera "github.com/transparency-dev/trillian-tessera"
+	"github.com/transparency-dev/trillian-tessera/api/layout"
 	"github.com/transparency-dev/trillian-tessera/client"
 	"github.com/transparency-dev/trillian-tessera/ctonly"
+	"golang.org/x/crypto/cryptobyte"
 	"golang.org/x/mod/sumdb/note"
 	"k8s.io/klog/v2"
 )
@@ -197,15 +202,58 @@ func (d *LocalBesEffortDedup) sync(ctx context.Context, origin string, v note.Ve
 	if err != nil {
 		return fmt.Errorf("OldSize(): %v", err)
 	}
+
 	// TODO(phboneff): add parallelism
+	// Greatly inspired by https://github.com/FiloSottile/sunlight/blob/main/tile.go and
+	// https://github.com/transparency-dev/trillian-tessera/blob/main/client/client.go
 	if ckpt.Size > oldSize {
 		for i := oldSize / 8; i <= ckpt.Size/8; i++ {
-			b, err := client.GetEntryBundle(ctx, d.fetcher, i, ckpt.Size)
+			entries := [][]byte{}
+			p := layout.EntriesPath(i, ckpt.Size)
+			eRaw, err := d.fetcher(ctx, p)
 			if err != nil {
-				return fmt.Errorf("client.GetEntryBundle(): %v", err)
+				if errors.Is(err, os.ErrNotExist) {
+					return fmt.Errorf("leaf bundle at index %d not found: %v", i, err)
+				}
+				return fmt.Errorf("failed to fetch leaf bundle at index %d: %v", i, err)
 			}
-			for k, e := range b.Entries {
-				key := sha256.Sum256(e) // TODO(phboneff): PARSE THE CT ENTRY HERE
+			s := cryptobyte.String(eRaw)
+
+			for len(s) > 0 {
+				var timestamp uint64
+				var entryType uint16
+				var extensions, fingerprints cryptobyte.String
+				if !s.ReadUint64(&timestamp) || !s.ReadUint16(&entryType) || timestamp > math.MaxInt64 {
+					return fmt.Errorf("invalid data tile")
+				}
+				crt := []byte{}
+				switch entryType {
+				case 0: // x509_entry
+					if !s.ReadUint24LengthPrefixed((*cryptobyte.String)(&crt)) ||
+						// TODO(phboneff): remove below?
+						!s.ReadUint16LengthPrefixed(&extensions) ||
+						!s.ReadUint16LengthPrefixed(&fingerprints) {
+						return fmt.Errorf("invalid data tile x509_entry")
+					}
+				case 1: // precert_entry
+					IssuerKeyHash := [32]byte{}
+					var defangedCrt, extensions cryptobyte.String
+					if !s.CopyBytes(IssuerKeyHash[:]) ||
+						!s.ReadUint24LengthPrefixed(&defangedCrt) ||
+						!s.ReadUint16LengthPrefixed(&extensions) ||
+						!s.ReadUint24LengthPrefixed((*cryptobyte.String)(&crt)) ||
+						// TODO(phboneff): remove below?
+						!s.ReadUint16LengthPrefixed(&fingerprints) {
+						return fmt.Errorf("invalid data tile precert_entry")
+					}
+				default:
+					return fmt.Errorf("invalid data tile: unknown type %d", entryType)
+				}
+				entries = append(entries, crt)
+			}
+
+			for k, e := range entries {
+				key := sha256.Sum256(e)
 				idx := i*8 + uint64(k)
 				err := d.Add(ctx, key, idx)
 				if err != nil {
