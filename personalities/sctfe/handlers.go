@@ -323,6 +323,9 @@ func addChainInternal(ctx context.Context, li *logInfo, w http.ResponseWriter, r
 
 	// TODO(phboneff): check if want to store the chain, even if we don't re-log the leaf to get potential other paths
 	idx, ok, err := li.storage.GetCertIndex(ctx, chain[0])
+	if err != nil {
+		return http.StatusInternalServerError, fmt.Errorf("couldnn't deduplicate the request: %s", err)
+	}
 	if !ok {
 
 		// TODO(phboneff): refactor entryFromChain to avoid recomputing hashes in AddIssuerChain
