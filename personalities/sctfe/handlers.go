@@ -321,7 +321,6 @@ func addChainInternal(ctx context.Context, li *logInfo, w http.ResponseWriter, r
 		return http.StatusBadRequest, fmt.Errorf("failed to build MerkleTreeLeaf: %s", err)
 	}
 
-	// TODO(phboneff): check if want to store the chain, even if we don't re-log the leaf to get potential other paths
 	idx, ok, err := li.storage.GetCertIndex(ctx, chain[0])
 	if err != nil {
 		return http.StatusInternalServerError, fmt.Errorf("couldnn't deduplicate the request: %s", err)
@@ -374,7 +373,7 @@ func addChainInternal(ctx context.Context, li *logInfo, w http.ResponseWriter, r
 		lastSCTTimestamp.Set(float64(sct.Timestamp), li.LogOrigin)
 	}
 
-	// TODO(phboneff): move this arround / make better
+	// TODO(phboneff): move this around / make better
 	go func() {
 		err := li.storage.AddCertIndex(context.TODO(), chain[0], idx)
 		if err != nil {
