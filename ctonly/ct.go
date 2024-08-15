@@ -37,6 +37,7 @@ package ctonly
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 
 	"github.com/transparency-dev/merkle/rfc6962"
@@ -84,7 +85,11 @@ func (c Entry) LeafData(idx uint64) []byte {
 			b.AddBytes(f[:])
 		}
 	})
-	return b.BytesOrPanic()
+	d := b.BytesOrPanic()
+	r := make([]byte, 0, 2+len(d))
+	r = binary.BigEndian.AppendUint16(r, uint16(len(d)))
+	r = append(r, d...)
+	return r
 }
 
 // MerkleTreeLeaf returns a RFC 6962 MerkleTreeLeaf.
