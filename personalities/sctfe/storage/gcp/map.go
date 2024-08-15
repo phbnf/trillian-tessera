@@ -89,7 +89,7 @@ func (s *GCSStorage) Exists(ctx context.Context, key []byte) (bool, error) {
 }
 
 // Get fetches an object stored under key.
-func (s GCSStorage) Get(ctx context.Context, key [32]byte) ([]byte, bool, error) {
+func (s GCSStorage) Get(ctx context.Context, key []byte) ([]byte, bool, error) {
 	objName := s.keyToObjName(key)
 	r, err := s.bucket.Object(objName).NewReader(ctx)
 	if err != nil {
