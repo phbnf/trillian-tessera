@@ -66,8 +66,8 @@ type IssuerStorage interface {
 }
 
 type CertIndexStorage interface {
-	Add(ctx context.Context, key [32]byte, idx uint64) error
-	Get(ctx context.Context, key [32]byte) (uint64, bool, error)
+	Add(ctx context.Context, key []byte, idx uint64) error
+	Get(ctx context.Context, key []byte) (uint64, bool, error)
 }
 
 // CTStorage implements Storage.
