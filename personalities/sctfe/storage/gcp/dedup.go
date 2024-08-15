@@ -24,8 +24,8 @@ import (
 )
 
 type KV interface {
-	Add(ctx context.Context, key [32]byte, data []byte) error
-	Get(ctx context.Context, key [32]byte) ([]byte, bool, error)
+	Add(ctx context.Context, key []byte, data []byte) error
+	Get(ctx context.Context, key []byte) ([]byte, bool, error)
 }
 
 // GlobalBestEffortDedup implements CertIndexStorage.
@@ -41,12 +41,12 @@ func NewGlobalBestEffortDedup(ctx context.Context, projectID string, bucket stri
 	return &GlobalBestEffortDedup{kv: storage}, nil
 }
 
-func (d GlobalBestEffortDedup) Add(ctx context.Context, key [32]byte, idx uint64) error {
+func (d GlobalBestEffortDedup) Add(ctx context.Context, key []byte, idx uint64) error {
 	idxb := binary.BigEndian.AppendUint64([]byte{}, idx)
 	return d.kv.Add(ctx, key, idxb)
 }
 
-func (d GlobalBestEffortDedup) Get(ctx context.Context, key [32]byte) (uint64, bool, error) {
+func (d GlobalBestEffortDedup) Get(ctx context.Context, key []byte) (uint64, bool, error) {
 	idxb, ok, err := d.kv.Get(ctx, key)
 	idx := binary.BigEndian.Uint64(idxb)
 	return idx, ok, err
