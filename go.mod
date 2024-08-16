@@ -27,7 +27,12 @@ require (
 	k8s.io/klog/v2 v2.130.1
 )
 
-require github.com/cisco/go-tls-syntax v0.0.0-20200617162716-46b0cfb76b9b // indirect
+replace github.com/google/certificate-transparency-go => /usr/local/google/home/phboneff/git/phbnf/certificate-transparency-go
+
+require (
+	github.com/cisco/go-tls-syntax v0.0.0-20200617162716-46b0cfb76b9b // indirect
+	go.etcd.io/bbolt v1.3.11 // indirect
+)
 
 require (
 	cel.dev/expr v0.15.0 // indirect
