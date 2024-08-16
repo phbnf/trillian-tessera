@@ -17,11 +17,12 @@ package main
 
 import (
 	"context"
-	crand "crypto/rand"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"math/rand"
 	"net/http"
 	"os"
@@ -29,6 +30,10 @@ import (
 	"time"
 
 	movingaverage "github.com/RobinUS2/golang-moving-average"
+	ct "github.com/google/certificate-transparency-go"
+	ctclient "github.com/google/certificate-transparency-go/client"
+	"github.com/google/certificate-transparency-go/jsonclient"
+	"github.com/google/certificate-transparency-go/scanner"
 	"github.com/transparency-dev/trillian-tessera/client"
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/net/http2"
@@ -66,6 +71,13 @@ var (
 	bearerTokenWrite = flag.String("bearer_token_write", "", "The bearer token for auth to write. For GCP this is the result of `gcloud auth print-identity-token`. If unset will default to --bearer_token.")
 
 	forceHTTP2 = flag.Bool("force_http2", false, "Use HTTP/2 connections *only*")
+
+	logURI        = flag.String("log_uri", "https://ct.googleapis.com/aviator", "CT log base URI")
+	batchSize     = flag.Int("batch_size", 1000, "Max number of entries to request at per call to get-entries")
+	numWorkers    = flag.Int("num_workers", 2, "Number of concurrent matchers")
+	parallelFetch = flag.Int("parallel_fetch", 2, "Number of concurrent GetEntries fetches")
+	startIndex    = flag.Int64("start_index", 0, "Log index to start scanning at")
+	endIndex      = flag.Int64("end_index", 0, "Log index to end scanning at (non-inclusive, 0 = end of log)")
 
 	hc = &http.Client{
 		Transport: &http.Transport{
@@ -366,15 +378,10 @@ func (a *HammerAnalyser) errorLoop(ctx context.Context) {
 // startSize should be set to the initial size of the log so that repeated runs of the
 // hammer can start seeding leaves to avoid duplicates with previous runs.
 func newLeafGenerator(startSize uint64, minLeafSize int, dupChance float64) func() []byte {
-	genLeaf := func(n uint64) []byte {
-		// Make a slice with half the number of requested bytes since we'll
-		// hex-encode them below which gets us back up to the full amount.
-		filler := make([]byte, minLeafSize/2)
-		_, _ = crand.Read(filler)
-		return []byte(fmt.Sprintf("%x %d", filler, n))
-	}
+	input := make(chan []byte, 1000)
+	go fetch(input)
 
-	nextLeaf := genLeaf(startSize)
+	nextLeaf := <-input
 	return func() []byte {
 		if rand.Float64() <= dupChance {
 			// This one will actually be unique, but the next iteration will
@@ -386,8 +393,60 @@ func newLeafGenerator(startSize uint64, minLeafSize int, dupChance float64) func
 
 		startSize++
 		r := nextLeaf
-		nextLeaf = genLeaf(startSize)
+		nextLeaf = <-input
 		return r
+	}
+}
+
+func fetch(c chan []byte) {
+	logClient, err := ctclient.New(*logURI, &http.Client{
+		Timeout: 10 * time.Second,
+		Transport: &http.Transport{
+			TLSHandshakeTimeout:   30 * time.Second,
+			ResponseHeaderTimeout: 30 * time.Second,
+			MaxIdleConnsPerHost:   10,
+			DisableKeepAlives:     false,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+	}, jsonclient.Options{UserAgent: "ct-go-scanlog/1.0"})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	opts := scanner.ScannerOptions{
+		FetcherOptions: scanner.FetcherOptions{
+			BatchSize:     *batchSize,
+			ParallelFetch: *parallelFetch,
+			StartIndex:    *startIndex,
+			EndIndex:      *endIndex,
+		},
+		Matcher:    nil,
+		NumWorkers: *numWorkers,
+	}
+	s := scanner.NewScanner(logClient, opts)
+
+	ctx := context.Background()
+	maxNewEntries := func() int64 {
+		return int64(len(c) - cap(c))
+	}
+
+	f := func(e *ct.RawLogEntry) {
+		var req ct.AddChainRequest
+		req.Chain = append(req.Chain, e.Cert.Data)
+		for _, link := range e.Chain {
+			req.Chain = append(req.Chain, link.Data)
+		}
+		b, err := json.Marshal(req)
+		if err != nil {
+			klog.Infof("Couldn't marshall request: %+v", req)
+		}
+		c <- b
+	}
+
+	if err := s.Scan(ctx, f, f, maxNewEntries); err != nil {
+		log.Fatal(err)
 	}
 }
 
