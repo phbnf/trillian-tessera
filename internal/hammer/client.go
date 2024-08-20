@@ -42,7 +42,7 @@ type fetcher interface {
 // newLogClientsFromFlags returns a fetcher and a writer that will read
 // and write leaves to all logs in the `log_url` flag set.
 func newLogClientsFromFlags() (*roundRobinFetcher, *roundRobinLeafWriter) {
-	if len(logURL) == 0 {
+	if len(logFetcherURL) == 0 {
 		klog.Exitf("--log_url must be provided")
 	}
 
