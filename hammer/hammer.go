@@ -64,7 +64,7 @@ var (
 
 	showUI = flag.Bool("show_ui", true, "Set to false to disable the text-based UI")
 
-	logURI        = flag.String("log_uri", "https://ct.googleapis.com/aviator", "CT log base URI")
+	sourceLogURI  = flag.String("source_log_uri", "https://ct.googleapis.com/aviator", "CT log base URI")
 	batchSize     = flag.Int("batch_size", 1000, "Max number of entries to request at per call to get-entries")
 	numWorkers    = flag.Int("num_workers", 2, "Number of concurrent matchers")
 	parallelFetch = flag.Int("parallel_fetch", 2, "Number of concurrent GetEntries fetches")
@@ -366,7 +366,7 @@ func newLeafGenerator(startSize uint64, minLeafSize int, dupChance float64) func
 }
 
 func fetch(c chan []byte) {
-	logClient, err := ctclient.New(*logURI, &http.Client{
+	logClient, err := ctclient.New(*sourceLogURI, &http.Client{
 		Timeout: 10 * time.Second,
 		Transport: &http.Transport{
 			TLSHandshakeTimeout:   30 * time.Second,
