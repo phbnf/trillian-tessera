@@ -34,10 +34,9 @@ import (
 	ctclient "github.com/google/certificate-transparency-go/client"
 	"github.com/google/certificate-transparency-go/jsonclient"
 	"github.com/google/certificate-transparency-go/scanner"
+	tdnote "github.com/transparency-dev/formats/note"
 	"github.com/transparency-dev/trillian-tessera/client"
-	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/net/http2"
-
 	"k8s.io/klog/v2"
 )
 
@@ -108,7 +107,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	logSigV, err := note.NewVerifier(*logPubKey)
+	logSigV, err := tdnote.NewRFC6962Verifier(*logPubKey)
 	if err != nil {
 		klog.Exitf("failed to create verifier: %v", err)
 	}
