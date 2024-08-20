@@ -29,6 +29,8 @@ import (
 	"github.com/google/trillian/crypto/keys"
 	"github.com/google/trillian/monitoring"
 	"golang.org/x/mod/sumdb/note"
+
+	tdnote "github.com/transparency-dev/formats/note"
 )
 
 // InstanceOptions describes the options for a log instance.
@@ -111,6 +113,13 @@ func setUpLogInfo(ctx context.Context, opts InstanceOptions) (*logInfo, error) {
 		default:
 			return nil, errors.New("failed to verify consistency of public key with private key")
 		}
+
+		verifierString, err := tdnote.RFC6962VerifierString(vCfg.Config.Origin, vCfg.PubKey)
+		if err != nil {
+			return nil, fmt.Errorf("error creating static-ct-api checkpoint verifier string: %v", err)
+
+		}
+		fmt.Printf("verifier key: %s", verifierString)
 	}
 
 	validationOpts := CertValidationOpts{
