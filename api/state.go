@@ -18,8 +18,10 @@ package api
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/binary"
 	"fmt"
+	"math"
+
+	"golang.org/x/crypto/cryptobyte"
 )
 
 // HashTile represents a tile within the Merkle hash tree.
@@ -69,21 +71,70 @@ type EntryBundle struct {
 // UnmarshalText implements encoding/TextUnmarshaler and reads EntryBundles
 // which are encoded using the tlog-tiles spec.
 func (t *EntryBundle) UnmarshalText(raw []byte) error {
-	nodes := make([][]byte, 0, 256)
-	for index := 0; index < len(raw); {
-		dataIndex := index + 2
-		if dataIndex > len(raw) {
-			return fmt.Errorf("dangling bytes at byte index %d in data of %d bytes", index, len(raw))
+	entries := make([][]byte, 0, 256)
+	s := cryptobyte.String(raw)
+
+	for len(s) > 0 {
+		entry := []byte{}
+		var timestamp uint64
+		var entryType uint16
+		var extensions, fingerprints cryptobyte.String
+		if !s.ReadUint64(&timestamp) || !s.ReadUint16(&entryType) || timestamp > math.MaxInt64 {
+			return fmt.Errorf("invalid data tile")
 		}
-		size := int(binary.BigEndian.Uint16(raw[index:dataIndex]))
-		dataEnd := dataIndex + size
-		if dataEnd > len(raw) {
-			return fmt.Errorf("require %d bytes from byte index %d, but size is %d", size, dataIndex, len(raw))
+		bb := []byte{}
+		b := cryptobyte.NewBuilder(bb)
+		b.AddUint64(timestamp)
+		b.AddUint16(entryType)
+
+		switch entryType {
+		case 0: // x509_entry
+			if !s.ReadUint24LengthPrefixed((*cryptobyte.String)(&entry)) ||
+				// TODO(phboneff): remove below?
+				!s.ReadUint16LengthPrefixed(&extensions) ||
+				!s.ReadUint16LengthPrefixed(&fingerprints) {
+				return fmt.Errorf("invalid data tile x509_entry")
+			}
+			b.AddUint24LengthPrefixed(func(b *cryptobyte.Builder) {
+				b.AddBytes(entry)
+			})
+			b.AddUint16LengthPrefixed(func(b *cryptobyte.Builder) {
+				b.AddBytes(extensions)
+			})
+			b.AddUint16LengthPrefixed(func(b *cryptobyte.Builder) {
+				b.AddBytes(fingerprints)
+			})
+
+		case 1: // precert_entry
+			IssuerKeyHash := [32]byte{}
+			var defangedCrt, extensions cryptobyte.String
+			if !s.CopyBytes(IssuerKeyHash[:]) ||
+				!s.ReadUint24LengthPrefixed(&defangedCrt) ||
+				!s.ReadUint16LengthPrefixed(&extensions) ||
+				!s.ReadUint24LengthPrefixed((*cryptobyte.String)(&entry)) ||
+				// TODO(phboneff): remove below?
+				!s.ReadUint16LengthPrefixed(&fingerprints) {
+				return fmt.Errorf("invalid data tile precert_entry")
+			}
+			b.AddBytes(IssuerKeyHash[:])
+			b.AddUint24LengthPrefixed(func(b *cryptobyte.Builder) {
+				b.AddBytes(defangedCrt)
+			})
+			b.AddUint16LengthPrefixed(func(b *cryptobyte.Builder) {
+				b.AddBytes(extensions)
+			})
+			b.AddUint24LengthPrefixed(func(b *cryptobyte.Builder) {
+				b.AddBytes(entry)
+			})
+			b.AddUint16LengthPrefixed(func(b *cryptobyte.Builder) {
+				b.AddBytes(fingerprints)
+			})
+		default:
+			return fmt.Errorf("invalid data tile: unknown type %d", entryType)
 		}
-		data := raw[dataIndex:dataEnd]
-		nodes = append(nodes, data)
-		index = dataIndex + size
+		entries = append(entries, b.BytesOrPanic())
 	}
-	t.Entries = nodes
+	t.Entries = entries
 	return nil
+
 }
