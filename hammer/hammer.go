@@ -389,7 +389,7 @@ func fetch(c chan []byte) {
 			StartIndex:    *startIndex,
 			EndIndex:      *endIndex,
 		},
-		Matcher:    &scanner.MatchAll{},
+		Matcher:    scanner.MatchAll{},
 		NumWorkers: *numWorkers,
 	}
 	s := scanner.NewScanner(logClient, opts)
@@ -412,7 +412,11 @@ func fetch(c chan []byte) {
 		c <- b
 	}
 
-	if err := s.Scan(ctx, f, f, maxNewEntries); err != nil {
+	fnone := func(e *ct.RawLogEntry) {
+		return
+	}
+
+	if err := s.Scan(ctx, f, fnone, maxNewEntries); err != nil {
 		log.Fatal(err)
 	}
 }
