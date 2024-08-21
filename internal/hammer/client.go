@@ -69,7 +69,7 @@ func newLogClientsFromFlags() (*roundRobinFetcher, *roundRobinLeafWriter) {
 	}
 	writers := []httpLeafWriter{}
 	for _, s := range writeLogURL {
-		addURL, err := rootUrlOrDie(s).Parse("add")
+		addURL, err := rootURL.Parse("add-chain")
 		if err != nil {
 			klog.Exitf("Failed to create add URL: %v", err)
 		}
