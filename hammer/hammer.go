@@ -389,14 +389,14 @@ func fetch(c chan []byte) {
 			StartIndex:    *startIndex,
 			EndIndex:      *endIndex,
 		},
-		Matcher:    nil,
+		Matcher:    &scanner.MatchAll{},
 		NumWorkers: *numWorkers,
 	}
 	s := scanner.NewScanner(logClient, opts)
 
 	ctx := context.Background()
 	maxNewEntries := func() int64 {
-		return int64(len(c) - cap(c))
+		return int64(cap(c) - len(c))
 	}
 
 	f := func(e *ct.RawLogEntry) {
