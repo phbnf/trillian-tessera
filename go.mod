@@ -30,25 +30,31 @@ require (
 replace github.com/google/certificate-transparency-go => /usr/local/google/home/phboneff/git/phbnf/certificate-transparency-go
 
 require (
+	cel.dev/expr v0.15.0 // indirect
+	cloud.google.com/go v0.115.1 // indirect
+	cloud.google.com/go/auth v0.9.0 // indirect
+	cloud.google.com/go/monitoring v1.20.3 // indirect
+	cloud.google.com/go/trace v1.10.11 // indirect
+	contrib.go.opencensus.io/exporter/stackdriver v0.13.14 // indirect
+	github.com/aws/aws-sdk-go v1.46.4 // indirect
+	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cisco/go-tls-syntax v0.0.0-20200617162716-46b0cfb76b9b // indirect
-	go.etcd.io/bbolt v1.3.11 // indirect
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
+	github.com/letsencrypt/pkcs11key/v4 v4.0.0 // indirect
+	github.com/miekg/pkcs11 v1.1.1 // indirect
+	github.com/prometheus/client_model v0.6.1 // indirect
+	github.com/prometheus/common v0.55.0 // indirect
+	github.com/prometheus/procfs v0.15.1 // indirect
+	github.com/prometheus/prometheus v0.47.2 // indirect
 )
 
 require (
-	cel.dev/expr v0.15.0 // indirect
-	cloud.google.com/go v0.115.1 // indirect
-	cloud.google.com/go/auth v0.9.1 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.4 // indirect
 	cloud.google.com/go/compute/metadata v0.5.0 // indirect
 	cloud.google.com/go/iam v1.1.13 // indirect
 	cloud.google.com/go/longrunning v0.5.12 // indirect
-	cloud.google.com/go/monitoring v1.20.3 // indirect
-	cloud.google.com/go/trace v1.10.11 // indirect
-	contrib.go.opencensus.io/exporter/stackdriver v0.13.14 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/GoogleCloudPlatform/grpc-gcp-go/grpcgcp v1.5.0 // indirect
-	github.com/aws/aws-sdk-go v1.51.8 // indirect
-	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20240423153145-555b57ec207b // indirect
@@ -65,18 +71,10 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.2 // indirect
 	github.com/googleapis/gax-go/v2 v2.13.0 // indirect
-	github.com/jmespath/go-jmespath v0.4.1-0.20220621161143-b0104c826a24 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
-	github.com/letsencrypt/pkcs11key/v4 v4.0.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
-	github.com/miekg/pkcs11 v1.1.1 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
-	github.com/prometheus/client_model v0.6.1 // indirect
-	github.com/prometheus/common v0.55.0 // indirect
-	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/prometheus/prometheus v0.51.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.52.0 // indirect
