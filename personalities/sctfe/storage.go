@@ -28,15 +28,6 @@ import (
 )
 
 const (
-	// Each key is 64 bytes long, so this will take up to 64MB.
-	// A CT log references ~15k unique issuer certifiates in 2024, so this gives plenty of space
-	// if we ever run into this limit, we should re-think how it works.
-	maxCachedIssuerKeys = 1 << 20
-	"golang.org/x/sync/errgroup"
-	"k8s.io/klog/v2"
-)
-
-const (
 	// Each key is 32 bytes long, so this will take up to 32MB.
 	// A CT log references ~15k unique issuer certifiates in 2024, so this gives plenty of space
 	// if we ever run into this limit, we should re-think how it works.
@@ -74,7 +65,7 @@ type CertIndexStorage interface {
 type CTStorage struct {
 	storeData    func(context.Context, *ctonly.Entry) (uint64, error)
 	storeIssuers func(context.Context, []KV) error
-	crtIdxs   CertIndexStorage
+	crtIdxs      CertIndexStorage
 }
 
 // NewCTStorage instantiates a CTStorage object.
