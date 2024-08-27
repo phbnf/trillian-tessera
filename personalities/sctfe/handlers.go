@@ -338,7 +338,7 @@ func addChainInternal(ctx context.Context, li *logInfo, w http.ResponseWriter, r
 		klog.V(2).Infof("%s: %s => storage.Add", li.LogOrigin, method)
 		idx, err = li.storage.Add(ctx, entry)
 		if err != nil {
-			return http.StatusInternalServerError, fmt.Errorf("couldn't store the leaf")
+			return http.StatusInternalServerError, fmt.Errorf("couldn't store the leaf: %v", err)
 		}
 	}
 
