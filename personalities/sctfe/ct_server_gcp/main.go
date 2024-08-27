@@ -284,7 +284,7 @@ func newGCPStorage(ctx context.Context, vCfg *sctfe.ValidatedLogConfig, signer n
 		return nil, fmt.Errorf("Failed to initialize GCP issuer storage: %v", err)
 	}
 
-	crtIdxStorage, err := gcpSCTFE.NewGlobalBestEffortDedup(ctx, cfg.ProjectId, cfg.Bucket, "dedup/", "")
+	crtIdxStorage, err := gcpSCTFE.NewDedupStorage(ctx, cfg.ProjectId, cfg.Bucket, "dedup/", "")
 	if err != nil {
 		return nil, fmt.Errorf("Failed to initialize GCP issuer storage: %v", err)
 	}
