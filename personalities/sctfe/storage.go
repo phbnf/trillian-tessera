@@ -134,3 +134,20 @@ func cachedStoreIssuers(s IssuerStorage) func(context.Context, []KV) error {
 		return nil
 	}
 }
+
+func (cts CTStorage) AddCertIndex(ctx context.Context, c *x509.Certificate, idx uint64) error {
+	key := sha256.Sum256(c.Raw)
+	if err := cts.crtIdxs.Add(ctx, key[:], idx); err != nil {
+		return fmt.Errorf("error storing index %d of %q: %v", idx, hex.EncodeToString(key[:]), err)
+	}
+	return nil
+}
+
+func (cts CTStorage) GetCertIndex(ctx context.Context, c *x509.Certificate) (uint64, bool, error) {
+	key := sha256.Sum256(c.Raw)
+	idx, ok, err := cts.crtIdxs.Get(ctx, key[:])
+	if err != nil {
+		return 0, false, fmt.Errorf("error fetching index of %q: %v", hex.EncodeToString(key[:]), err)
+	}
+	return idx, ok, nil
+}
