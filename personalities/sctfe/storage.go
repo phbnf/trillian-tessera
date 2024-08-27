@@ -71,9 +71,9 @@ type CTStorage struct {
 // NewCTStorage instantiates a CTStorage object.
 func NewCTSTorage(logStorage tessera.Storage, issuerStorage IssuerStorage, certIdxStorage CertIndexStorage) (*CTStorage, error) {
 	ctStorage := &CTStorage{
-		storeData: tessera.NewCertificateTransparencySequencedWriter(logStorage),
-		issuers:   NewCachedIssuerStorage(issuerStorage),
-		crtIdxs:   certIdxStorage,
+		storeData:    tessera.NewCertificateTransparencySequencedWriter(logStorage),
+		storeIssuers: cachedStoreIssuers(issuerStorage),
+		crtIdxs:      certIdxStorage,
 	}
 	return ctStorage, nil
 }
