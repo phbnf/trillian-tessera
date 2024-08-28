@@ -41,9 +41,9 @@ type Storage interface {
 	Add(context.Context, *ctonly.Entry) (uint64, error)
 	// AddIssuerChain stores every the chain certificate in a content-addressable store under their sha256 hash.
 	AddIssuerChain(context.Context, []*x509.Certificate) error
-	// AddCertIndex stores the index of certificate in a log under its hash.
+	// AddCertIndex stores the index of certificate in a content-addressable store.
 	AddCertIndex(context.Context, *x509.Certificate, uint64) error
-	// GetCertIndex gets the index of certificate in a log from its hash.
+	// GetCertIndex gets the index of certificate from a content-addressable store.
 	GetCertIndex(context.Context, *x509.Certificate) (uint64, bool, error)
 }
 
@@ -71,7 +71,7 @@ type CTStorage struct {
 }
 
 // NewCTStorage instantiates a CTStorage object.
-func NewCTSTorage(logStorage tessera.Storage, issuerStorage IssuerStorage, dedupStorage dedup.BEDedupStorage) (*CTStorage, error) {
+func NewCTSTorage(logStorage tessera.Storage, issuerStorage IssuerStorage, dedupStorage dedup.DedupStorage) (*CTStorage, error) {
 	ctStorage := &CTStorage{
 		storeData:    tessera.NewCertificateTransparencySequencedWriter(logStorage),
 		storeIssuers: cachedStoreIssuers(issuerStorage),

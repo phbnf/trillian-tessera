@@ -49,25 +49,26 @@ type LocalBEDedupStorage interface {
 
 type ParseBundleFunc func([]byte, uint64) ([]LeafIdx, error)
 
-// UpdateFromLog synchronises a local best effort deduplication storage with a log.
-func UpdateFromLog(ctx context.Context, lds LocalBEDedupStorage, t time.Duration, f client.Fetcher, pb ParseBundleFunc) {
-	tck := time.NewTicker(t)
-	defer tck.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-tck.C:
-			if err := sync(ctx, lds, pb, f); err != nil {
-				klog.Warningf("error updating deduplication data: %v", err)
+func NewLocalBestEffortDedup(ctx context.Context, lds LocalDedupStorage, t time.Duration, f client.Fetcher, v note.Verifier, origin string, parseBundle func([]byte, uint64) ([]KV, error)) *LocalBEDedup {
+	ret := &LocalBEDedup{DedupStorage: lds, LogSize: lds.LogSize, fetcher: f}
+	go func() {
+		tck := time.NewTicker(t)
+		defer tck.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tck.C:
+				if err := ret.sync(ctx, origin, v, parseBundle); err != nil {
+					klog.Warningf("error updating deduplication data: %v", err)
+				}
 			}
 		}
 	}
 }
 
-// sync synchronises a deduplication storage with the corresponding log content.
-func sync(ctx context.Context, lds LocalBEDedupStorage, pb ParseBundleFunc, f client.Fetcher) error {
-	cpRaw, err := f(ctx, layout.CheckpointPath)
+func (d *LocalBEDedup) sync(ctx context.Context, origin string, v note.Verifier, parseBundle func([]byte, uint64) ([]KV, error)) error {
+	ckpt, _, _, err := client.FetchCheckpoint(ctx, d.fetcher, v, origin)
 	if err != nil {
 		return fmt.Errorf("error fetching checkpoint: %v", err)
 	}

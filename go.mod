@@ -16,7 +16,7 @@ require (
 	github.com/kylelemons/godebug v1.1.0
 	github.com/prometheus/client_golang v1.20.2
 	github.com/rivo/tview v0.0.0-20240625185742-b0a7293b8130
-	github.com/rs/cors v1.11.1
+	github.com/rs/cors v1.11.0
 	github.com/transparency-dev/formats v0.0.0-20240826204810-ad21d25a1c7f
 	github.com/transparency-dev/merkle v0.0.2
 	go.etcd.io/bbolt v1.3.11
@@ -27,7 +27,10 @@ require (
 	k8s.io/klog/v2 v2.130.1
 )
 
-require go.etcd.io/bbolt v1.3.11 // indirect
+require (
+	github.com/cisco/go-tls-syntax v0.0.0-20200617162716-46b0cfb76b9b // indirect
+	go.etcd.io/bbolt v1.3.11 // indirect
+)
 
 require (
 	cel.dev/expr v0.15.0 // indirect
