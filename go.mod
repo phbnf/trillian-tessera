@@ -27,6 +27,8 @@ require (
 	k8s.io/klog/v2 v2.130.1
 )
 
+require go.etcd.io/bbolt v1.3.11 // indirect
+
 require (
 	cel.dev/expr v0.15.0 // indirect
 	cloud.google.com/go v0.115.1 // indirect
