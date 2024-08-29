@@ -20,17 +20,14 @@ require (
 	github.com/transparency-dev/formats v0.0.0-20240826204810-ad21d25a1c7f
 	github.com/transparency-dev/merkle v0.0.2
 	go.etcd.io/bbolt v1.3.11
-	golang.org/x/exp v0.0.0-20240325151524-a685a6edb6d8
+	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
 	golang.org/x/mod v0.20.0
 	google.golang.org/api v0.194.0
 	google.golang.org/grpc v1.66.0
 	k8s.io/klog/v2 v2.130.1
 )
 
-require (
-	github.com/cisco/go-tls-syntax v0.0.0-20200617162716-46b0cfb76b9b // indirect
-	go.etcd.io/bbolt v1.3.11 // indirect
-)
+require github.com/cisco/go-tls-syntax v0.0.0-20200617162716-46b0cfb76b9b // indirect
 
 require (
 	cel.dev/expr v0.15.0 // indirect
