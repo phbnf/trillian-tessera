@@ -42,7 +42,7 @@ type fetcher interface {
 // newLogClientsFromFlags returns a fetcher and a writer that will read
 // and write leaves to all logs in the `log_url` flag set.
 func newLogClientsFromFlags() (*roundRobinFetcher, *roundRobinLeafWriter) {
-	if len(logFetcherURL) == 0 {
+	if len(logURL) == 0 {
 		klog.Exitf("--log_url must be provided")
 	}
 
@@ -69,7 +69,7 @@ func newLogClientsFromFlags() (*roundRobinFetcher, *roundRobinLeafWriter) {
 	}
 	writers := []httpLeafWriter{}
 	for _, s := range writeLogURL {
-		addURL, err := rootURL.Parse("add-chain")
+		addURL, err := rootUrlOrDie(s).Parse("add-chain")
 		if err != nil {
 			klog.Exitf("Failed to create add URL: %v", err)
 		}
