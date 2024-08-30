@@ -17,6 +17,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -28,7 +30,10 @@ import (
 	"sync"
 	"time"
 
+	ct "github.com/google/certificate-transparency-go"
 	"github.com/transparency-dev/trillian-tessera/client"
+
+	"golang.org/x/crypto/cryptobyte"
 	"k8s.io/klog/v2"
 )
 
@@ -190,13 +195,50 @@ func (w httpLeafWriter) Write(ctx context.Context, newLeaf []byte, parseRsp func
 	return index, nil
 }
 
-func parseAddRsp(rsp []byte) (uint64, error) {
-	parts := bytes.Split(rsp, []byte("\n"))
-	index, err := strconv.ParseUint(string(parts[0]), 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("write leaf failed to parse response: %v", rsp)
+// inspired by https://github.com/FiloSottile/sunlight/blob/main/tile.go
+func parseAddRsp(body []byte) (uint64, error) {
+	var resp ct.AddChainResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return 0, fmt.Errorf("can't parse add-chain response: %v", err)
 	}
-	return index, nil
+
+	extensionBytes, err := base64.StdEncoding.DecodeString(resp.Extensions)
+	if err != nil {
+		return 0, fmt.Errorf("can't decode extensions: %v", err)
+	}
+	extensions := cryptobyte.String(extensionBytes)
+	var extensionType uint8
+	var extensionData cryptobyte.String
+	var leafIdx int64
+	if !extensions.ReadUint8(&extensionType) {
+		return 0, fmt.Errorf("can't read extension type")
+	}
+	if extensionType != 0 {
+		return 0, fmt.Errorf("wrong extension type %d, want 0", extensionType)
+	}
+	if !extensions.ReadUint16LengthPrefixed(&extensionData) {
+		return 0, fmt.Errorf("can't read extension data")
+	}
+	if !readUint40(&extensionData, &leafIdx) {
+		return 0, fmt.Errorf("can't read leaf index from extension")
+	}
+	if !extensionData.Empty() ||
+		!extensions.Empty() {
+		return 0, fmt.Errorf("invalid data tile extensions: %v", resp.Extensions)
+	}
+	return uint64(leafIdx), nil
+}
+
+// readUint40 decodes a big-endian, 40-bit value into out and advances over it.
+// It reports whether the read was successful.
+// copied from https://github.com/FiloSottile/sunlight/blob/main/extensions.go
+func readUint40(s *cryptobyte.String, out *int64) bool {
+	var v []byte
+	if !s.ReadBytes(&v, 5) {
+		return false
+	}
+	*out = int64(v[0])<<32 | int64(v[1])<<24 | int64(v[2])<<16 | int64(v[3])<<8 | int64(v[4])
+	return true
 }
 
 func retryDelay(retryAfter string, defaultDur time.Duration) time.Duration {
