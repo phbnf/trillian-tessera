@@ -155,7 +155,7 @@ type httpLeafWriter struct {
 	u *url.URL
 }
 
-func (w httpLeafWriter) Write(ctx context.Context, newLeaf []byte) (uint64, error) {
+func (w httpLeafWriter) Write(ctx context.Context, newLeaf []byte, parseRsp func([]byte) (uint64, error)) (uint64, error) {
 	req, err := http.NewRequest(http.MethodPost, w.u.String(), bytes.NewReader(newLeaf))
 	if err != nil {
 		return 0, fmt.Errorf("failed to create request: %v", err)
@@ -183,10 +183,18 @@ func (w httpLeafWriter) Write(ctx context.Context, newLeaf []byte) (uint64, erro
 	default:
 		return 0, fmt.Errorf("write leaf was not OK. Status code: %d. Body: %q", resp.StatusCode, body)
 	}
-	parts := bytes.Split(body, []byte("\n"))
+	index, err := parseRsp(body)
+	if err != nil {
+		return 0, fmt.Errorf("write leaf failed to parse response: %v", err)
+	}
+	return index, nil
+}
+
+func parseAddRsp(rsp []byte) (uint64, error) {
+	parts := bytes.Split(rsp, []byte("\n"))
 	index, err := strconv.ParseUint(string(parts[0]), 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("write leaf failed to parse response: %v", body)
+		return 0, fmt.Errorf("write leaf failed to parse response: %v", rsp)
 	}
 	return index, nil
 }
@@ -214,9 +222,9 @@ type roundRobinLeafWriter struct {
 	ws  []httpLeafWriter
 }
 
-func (rr *roundRobinLeafWriter) Write(ctx context.Context, newLeaf []byte) (uint64, error) {
+func (rr *roundRobinLeafWriter) Write(ctx context.Context, newLeaf []byte, parseAddRsp func([]byte) (uint64, error)) (uint64, error) {
 	w := rr.next()
-	return w(ctx, newLeaf)
+	return w(ctx, newLeaf, parseAddRsp)
 }
 
 func (rr *roundRobinLeafWriter) next() LeafWriter {
