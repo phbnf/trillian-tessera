@@ -29,7 +29,7 @@ import (
 // LeafWriter is the signature of a function which can write arbitrary data to a log.
 // The data to be written is provided, and the implementation must return the sequence
 // number at which this data will be found in the log, or an error.
-type LeafWriter func(ctx context.Context, data []byte) (uint64, error)
+type LeafWriter func(ctx context.Context, data []byte, parseAddRsp func([]byte) (uint64, error)) (uint64, error)
 
 // NewLeafReader creates a LeafReader.
 // The next function provides a strategy for which leaves will be read.
@@ -199,7 +199,7 @@ func (w *LogWriter) Run(ctx context.Context) {
 		}
 		newLeaf := w.gen()
 		lt := leafTime{queuedAt: time.Now()}
-		index, err := w.writer(ctx, newLeaf)
+		index, err := w.writer(ctx, newLeaf, parseAddRsp)
 		if err != nil {
 			w.errChan <- fmt.Errorf("failed to create request: %w", err)
 			continue
