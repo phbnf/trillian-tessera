@@ -109,8 +109,13 @@ func main() {
 
 	// Register handlers for all the configured logs using the correct RPC
 	// client.
+<<<<<<< HEAD
 	// TODO(phboneff): setupAndRegister can probably be inlined / removed later
 	_, err = setupAndRegister(ctx,
+=======
+	var publicKeys []crypto.PublicKey
+	inst, err := setupAndRegister(ctx,
+>>>>>>> 5687c35 (edit the rest of the code accordinly)
 		*rpcDeadline,
 		vCfg,
 		corsMux,
@@ -118,6 +123,31 @@ func main() {
 	)
 	if err != nil {
 		klog.Exitf("Failed to set up log instance for %+v: %v", vCfg, err)
+<<<<<<< HEAD
+=======
+	}
+
+	// Ensure that this log does not share the same private key as any other
+	// log that has already been set up and registered.
+	if publicKey := inst.GetPublicKey(); publicKey != nil {
+		for _, p := range publicKeys {
+			switch pub := publicKey.(type) {
+			case *ecdsa.PublicKey:
+				if pub.Equal(p) {
+					klog.Exitf("Same private key used by more than one log")
+				}
+			case ed25519.PublicKey:
+				if pub.Equal(p) {
+					klog.Exitf("Same private key used by more than one log")
+				}
+			case *rsa.PublicKey:
+				if pub.Equal(p) {
+					klog.Exitf("Same private key used by more than one log")
+				}
+			}
+		}
+		publicKeys = append(publicKeys, publicKey)
+>>>>>>> 5687c35 (edit the rest of the code accordinly)
 	}
 
 	// Return a 200 on the root, for GCE default health checking :/
