@@ -48,8 +48,16 @@ import (
 	"k8s.io/klog/v2"
 )
 
+func init() {
+	flag.Var(&notAfterStart, "not_after_start", "not_after_start defines the start of the range of acceptable NotAfter values, inclusive. Leaving this unset implies no lower bound to the range. RFC3339 format, e.g: 2024-01-02T15:04:05Z")
+	flag.Var(&notAfterLimit, "not_after_limit", "not_after_start defines the start of the range of acceptable NotAfter values, inclusive. Leaving this unset implies no lower bound to the range. RFC3339 format, e.g: 2024-01-02T15:04:05Z")
+}
+
 // Global flags that affect all log instances.
 var (
+	notAfterStart timestampFlag
+	notAfterLimit timestampFlag
+
 	httpEndpoint       = flag.String("http_endpoint", "localhost:6962", "Endpoint for HTTP (host:port)")
 	tlsCert            = flag.String("tls_certificate", "", "Path to server TLS certificate")
 	tlsKey             = flag.String("tls_key", "", "Path to server TLS private key")
@@ -94,7 +102,7 @@ func main() {
 		klog.Exitf("Failed to read config: %v", err)
 	}
 
-	vCfg, err := sctfe.ValidateLogConfig(cfg, *origin, *projectID, *bucket, *spannerDB, *rootsPemFile, *rejectExpired, *rejectUnexpired, *extKeyUsages, *rejectExtensions)
+	vCfg, err := sctfe.ValidateLogConfig(cfg, *origin, *projectID, *bucket, *spannerDB, *rootsPemFile, *rejectExpired, *rejectUnexpired, *extKeyUsages, *rejectExtensions, notAfterStart.t, notAfterLimit.t)
 	if err != nil {
 		klog.Exitf("Invalid config: %v", err)
 	}
@@ -276,4 +284,24 @@ func newGCPStorage(ctx context.Context, signer note.Signer) (*sctfe.CTStorage, e
 	go dedup.UpdateFromLog(ctx, beDedupStorage, time.Second, fetcher, sctfe.DedupFromBundle)
 
 	return sctfe.NewCTSTorage(tesseraStorage, issuerStorage, beDedupStorage)
+}
+
+type timestampFlag struct {
+	t *time.Time
+}
+
+func (t *timestampFlag) String() string {
+	if t.t != nil {
+		return t.t.Format(time.RFC3339)
+	}
+	return ""
+}
+
+func (t *timestampFlag) Set(w string) error {
+	tt, err := time.Parse(time.RFC3339, w)
+	if err != nil {
+		return fmt.Errorf("can't parse %q as RFC3339 timestamp: %v", w, err)
+	}
+	t.t = &tt
+	return nil
 }
