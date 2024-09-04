@@ -120,7 +120,7 @@ func LogConfigFromFile(filename string) (*configpb.LogConfig, error) {
 //   - Merge delays (if present) are correct.
 //
 // Returns the validated structures (useful to avoid double validation).
-func ValidateLogConfig(cfg *configpb.LogConfig, origin string, projectID string, bucket string, spannerDB string, rootsPemFile string) (*ValidatedLogConfig, error) {
+func ValidateLogConfig(cfg *configpb.LogConfig, origin string, projectID string, bucket string, spannerDB string, rootsPemFile string, rejectExpired bool, rejectUnexpired bool) (*ValidatedLogConfig, error) {
 	if len(origin) == 0 {
 		return nil, errors.New("empty origin")
 	}
@@ -143,8 +143,8 @@ func ValidateLogConfig(cfg *configpb.LogConfig, origin string, projectID string,
 		RootsPemFile:          rootsPemFile,
 		PrivateKey:            cfg.PrivateKey,
 		PublicKey:             cfg.PublicKey,
-		RejectExpired:         cfg.RejectExpired,
-		RejectUnexpired:       cfg.RejectUnexpired,
+		RejectExpired:         rejectExpired,
+		RejectUnexpired:       rejectUnexpired,
 		ExtKeyUsages:          cfg.ExtKeyUsages,
 		NotAfterStart:         cfg.NotAfterLimit,
 		NotAfterLimit:         cfg.NotAfterLimit,
@@ -172,7 +172,7 @@ func ValidateLogConfig(cfg *configpb.LogConfig, origin string, projectID string,
 	}
 	vCfg.PrivKey = privKey
 
-	if cfg.RejectExpired && cfg.RejectUnexpired {
+	if rejectExpired && rejectUnexpired {
 		return nil, errors.New("rejecting all certificates")
 	}
 

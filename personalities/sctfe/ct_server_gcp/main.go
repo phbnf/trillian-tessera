@@ -67,7 +67,7 @@ var (
 	bucket             = flag.String("bucket", "", "name of the bucket to store the log in")
 	spannerDB          = flag.String("spanner_db_path", "", "projects/{projectId}/instances/{instanceId}/databases/{databaseId}")
 	rootsPemFile       = flag.String("roots_pem_file", "", "Paths to the file containing root certificates that are acceptable to the log. The certs are served through get-roots endpoint.")
-	rejectExpired      = flag.Bool("reject_expired", true, "if true then the certificate validity period will be checked against the current time during the validation of submissions. This will cause expired certificates to be rejected.")
+	rejectExpired      = flag.Bool("reject_expired", false, "if true then the certificate validity period will be checked against the current time during the validation of submissions. This will cause expired certificates to be rejected.")
 	rejectUnexpired    = flag.Bool("reject_unexpired", false, "If reject_unexpired is true then CTFE rejects certificates that are either currently valid or not yet valid.")
 	extKeyUsages       = flag.String("ext_key_usages", "", "If set, ext_key_usages will restrict the set of such usages that the server will accept. By default all are accepted. The values specified must be ones known to the x509 package.")
 	rejectExtensions   = flag.String("reject_extension", "", "A list of X.509 extension OIDs, in dotted string form (e.g. '2.3.4.5') which should cause submissions to be rejected.")
@@ -94,7 +94,7 @@ func main() {
 		klog.Exitf("Failed to read config: %v", err)
 	}
 
-	vCfg, err := sctfe.ValidateLogConfig(cfg, *origin, *projectID, *bucket, *spannerDB, *rootsPemFile)
+	vCfg, err := sctfe.ValidateLogConfig(cfg, *origin, *projectID, *bucket, *spannerDB, *rootsPemFile, *rejectExpired, *rejectUnexpired)
 	if err != nil {
 		klog.Exitf("Invalid config: %v", err)
 	}
