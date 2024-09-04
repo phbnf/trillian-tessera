@@ -61,12 +61,17 @@ var (
 	tracingProjectID   = flag.String("tracing_project_id", "", "project ID to pass to stackdriver. Can be empty for GCP, consult docs for other platforms.")
 	tracingPercent     = flag.Int("tracing_percent", 0, "Percent of requests to be traced. Zero is a special case to use the DefaultSampler")
 	pkcs11ModulePath   = flag.String("pkcs11_module_path", "", "Path to the PKCS#11 module to use for keys that use the PKCS#11 interface")
-	// TODO: remove comment above when the config proto has been deleted.
-	dedupPath = flag.String("dedup_path", "", "Path to the deduplication database")
-	origin    = flag.String("origin", "", "origin of the log, for checkpoints and the monitoring prefix")
-	projectID = flag.String("project_id", "", "origin of the log, for checkpoints and the monitoring prefix")
-	bucket    = flag.String("bucket", "", "name of the bucket to store the log in")
-	spannerDB = flag.String("spanner_db_path", "", "projects/{projectId}/instances/{instanceId}/databases/{databaseId}")
+	dedupPath          = flag.String("dedup_path", "", "Path to the deduplication database")
+	origin             = flag.String("origin", "", "origin of the log, for checkpoints and the monitoring prefix")
+	projectID          = flag.String("project_id", "", "origin of the log, for checkpoints and the monitoring prefix")
+	bucket             = flag.String("bucket", "", "name of the bucket to store the log in")
+	spannerDB          = flag.String("spanner_db_path", "", "projects/{projectId}/instances/{instanceId}/databases/{databaseId}")
+	rootsPemFile       = flag.String("roots_pem_file", "", "Paths to the file containing root certificates that are acceptable to the log. The certs are served through get-roots endpoint.")
+	rejectExpired      = flag.Bool("reject_expired", true, "if true then the certificate validity period will be checked against the current time during the validation of submissions. This will cause expired certificates to be rejected.")
+	rejectUnexpired    = flag.Bool("reject_unexpired", false, "If reject_unexpired is true then CTFE rejects certificates that are either currently valid or not yet valid.")
+	extKeyUsages       = flag.String("ext_key_usages", "", "If set, ext_key_usages will restrict the set of such usages that the server will accept. By default all are accepted. The values specified must be ones known to the x509 package.")
+	rejectExtensions   = flag.String("reject_extension", "", "A list of X.509 extension OIDs, in dotted string form (e.g. '2.3.4.5') which should cause submissions to be rejected.")
+	privKey            = flag.String("private_key", "", "Path to a private key .der file. Used to sign checkpoints and SCTs.")
 )
 
 // nolint:staticcheck
@@ -89,7 +94,7 @@ func main() {
 		klog.Exitf("Failed to read config: %v", err)
 	}
 
-	vCfg, err := sctfe.ValidateLogConfig(cfg, *origin, *projectID, *bucket, *spannerDB)
+	vCfg, err := sctfe.ValidateLogConfig(cfg, *origin, *projectID, *bucket, *spannerDB, *rootsPemFile)
 	if err != nil {
 		klog.Exitf("Invalid config: %v", err)
 	}

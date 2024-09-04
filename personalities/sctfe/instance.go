@@ -88,10 +88,8 @@ func setUpLogInfo(ctx context.Context, opts InstanceOptions) (*logInfo, error) {
 
 	// Load the trusted roots.
 	roots := x509util.NewPEMCertPool()
-	for _, pemFile := range cfg.RootsPemFile {
-		if err := roots.AppendCertsFromPEMFile(pemFile); err != nil {
-			return nil, fmt.Errorf("failed to read trusted roots: %v", err)
-		}
+	if err := roots.AppendCertsFromPEMFile(cfg.RootsPemFile); err != nil {
+		return nil, fmt.Errorf("failed to read trusted roots: %v", err)
 	}
 
 	var signer crypto.Signer
