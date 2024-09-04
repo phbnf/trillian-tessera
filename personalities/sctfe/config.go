@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/certificate-transparency-go/x509"
@@ -120,7 +121,7 @@ func LogConfigFromFile(filename string) (*configpb.LogConfig, error) {
 //   - Merge delays (if present) are correct.
 //
 // Returns the validated structures (useful to avoid double validation).
-func ValidateLogConfig(cfg *configpb.LogConfig, origin string, projectID string, bucket string, spannerDB string, rootsPemFile string, rejectExpired bool, rejectUnexpired bool) (*ValidatedLogConfig, error) {
+func ValidateLogConfig(cfg *configpb.LogConfig, origin string, projectID string, bucket string, spannerDB string, rootsPemFile string, rejectExpired bool, rejectUnexpired bool, extKeyUsages string, rejectExtensions string) (*ValidatedLogConfig, error) {
 	if len(origin) == 0 {
 		return nil, errors.New("empty origin")
 	}
@@ -138,6 +139,15 @@ func ValidateLogConfig(cfg *configpb.LogConfig, origin string, projectID string,
 		return nil, errors.New("empty spannerDB")
 	}
 
+	lExtKeyUsages := []string{}
+	lRejectExtensions := []string{}
+	if len(extKeyUsages) > 0 {
+		lExtKeyUsages = strings.Split(extKeyUsages, ",")
+	}
+	if len(rejectExtensions) > 0 {
+		lRejectExtensions = strings.Split(rejectExtensions, ",")
+	}
+
 	vCfg := ValidatedLogConfig{Config: &LogConfig{
 		Origin:                origin,
 		RootsPemFile:          rootsPemFile,
@@ -145,13 +155,13 @@ func ValidateLogConfig(cfg *configpb.LogConfig, origin string, projectID string,
 		PublicKey:             cfg.PublicKey,
 		RejectExpired:         rejectExpired,
 		RejectUnexpired:       rejectUnexpired,
-		ExtKeyUsages:          cfg.ExtKeyUsages,
+		ExtKeyUsages:          lExtKeyUsages,
 		NotAfterStart:         cfg.NotAfterLimit,
 		NotAfterLimit:         cfg.NotAfterLimit,
 		AcceptOnlyCa:          cfg.AcceptOnlyCa,
 		MaxMergeDelaySec:      cfg.MaxMergeDelaySec,
 		ExpectedMergeDelaySec: cfg.ExpectedMergeDelaySec,
-		RejectExtensions:      cfg.RejectExtensions,
+		RejectExtensions:      lRejectExtensions,
 	}}
 
 	// Validate the public key.
@@ -177,8 +187,8 @@ func ValidateLogConfig(cfg *configpb.LogConfig, origin string, projectID string,
 	}
 
 	// Validate the extended key usages list.
-	if len(cfg.ExtKeyUsages) > 0 {
-		for _, kuStr := range cfg.ExtKeyUsages {
+	if len(vCfg.Config.ExtKeyUsages) > 0 {
+		for _, kuStr := range vCfg.Config.ExtKeyUsages {
 			if ku, ok := stringToKeyUsage[kuStr]; ok {
 				// If "Any" is specified, then we can ignore the entire list and
 				// just disable EKU checking.

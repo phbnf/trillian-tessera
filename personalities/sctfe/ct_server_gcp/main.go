@@ -94,7 +94,7 @@ func main() {
 		klog.Exitf("Failed to read config: %v", err)
 	}
 
-	vCfg, err := sctfe.ValidateLogConfig(cfg, *origin, *projectID, *bucket, *spannerDB, *rootsPemFile, *rejectExpired, *rejectUnexpired)
+	vCfg, err := sctfe.ValidateLogConfig(cfg, *origin, *projectID, *bucket, *spannerDB, *rootsPemFile, *rejectExpired, *rejectUnexpired, *extKeyUsages, *rejectExtensions)
 	if err != nil {
 		klog.Exitf("Invalid config: %v", err)
 	}
