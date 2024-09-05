@@ -52,7 +52,7 @@ func NWithSuffix(l, n, logSize uint64) string {
 // EntriesPath returns the local path for the nth entry bundle. p denotes the partial
 // tile size, or 0 if the tile is complete.
 func EntriesPath(n, logSize uint64) string {
-	return fmt.Sprintf("tile/entries/%s", NWithSuffix(0, n, logSize))
+	return fmt.Sprintf("tile/data/%s", NWithSuffix(0, n, logSize))
 }
 
 // TilePath builds the path to the subtree tile with the given level and index in tile space.
