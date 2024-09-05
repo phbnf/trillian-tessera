@@ -30,7 +30,7 @@ import (
 	"golang.org/x/mod/sumdb/note"
 )
 
-func fakeCTStorage(_ context.Context, _ *ValidatedLogConfig, _ note.Signer) (*CTStorage, error) {
+func fakeCTStorage(_ context.Context, _ note.Signer) (*CTStorage, error) {
 	return &CTStorage{}, nil
 }
 
@@ -52,7 +52,7 @@ func TestSetUpInstance(t *testing.T) {
 		extKeyUsages     string
 		rejectExtensions string
 		signer           crypto.Signer
-		ctStorage        func(context.Context, *ValidatedLogConfig, note.Signer) (*CTStorage, error)
+		ctStorage        func(context.Context, note.Signer) (*CTStorage, error)
 		wantErr          string
 	}{
 		{
@@ -149,7 +149,7 @@ func TestSetUpInstance(t *testing.T) {
 			spannerDB:    "spanner",
 			rootsPemFile: "./testdata/fake-ca.cert",
 			signer:       signer,
-			ctStorage: func(_ context.Context, _ *ValidatedLogConfig, _ note.Signer) (*CTStorage, error) {
+			ctStorage: func(_ context.Context, _ note.Signer) (*CTStorage, error) {
 				return nil, fmt.Errorf("I failed")
 			},
 			wantErr: "failed to initiate storage backend",
