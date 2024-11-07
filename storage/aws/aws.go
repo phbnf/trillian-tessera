@@ -35,20 +35,20 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"time"
 
-	"cloud.google.com/go/spanner"
-	"cloud.google.com/go/spanner/apiv1/spannerpb"
-	gcs "cloud.google.com/go/storage"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 	"github.com/google/go-cmp/cmp"
 	tessera "github.com/transparency-dev/trillian-tessera"
 	"github.com/transparency-dev/trillian-tessera/api"
 	"github.com/transparency-dev/trillian-tessera/api/layout"
 	storage "github.com/transparency-dev/trillian-tessera/storage/internal"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/grpc/codes"
 	"k8s.io/klog/v2"
@@ -65,7 +65,7 @@ const (
 
 // Storage is a AWS based storage implementation for Tessera.
 type Storage struct {
-	gcsClient *gcs.Client
+	s3Client *s3.Client
 
 	projectID string
 	bucket    string
@@ -82,8 +82,8 @@ type Storage struct {
 
 // objStore describes a type which can store and retrieve objects.
 type objStore interface {
-	getObject(ctx context.Context, obj string) ([]byte, int64, error)
-	setObject(ctx context.Context, obj string, data []byte, cond *gcs.Conditions, contType string) error
+	getObject(ctx context.Context, obj string) ([]byte, string, error)
+	setObject(ctx context.Context, obj string, data []byte, cond *s3.PutObjectInput, contType string) error
 }
 
 // sequencer describes a type which knows how to sequence entries.
@@ -106,7 +106,7 @@ type consumeFunc func(ctx context.Context, from uint64, entries []storage.Sequen
 type Config struct {
 	// ProjectID is the AWS project which hosts the storage bucket and Spanner database for the log.
 	ProjectID string
-	// Bucket is the name of the GCS bucket to use for storing log state.
+	// Bucket is the name of the S3 bucket to use for storing log state.
 	Bucket string
 	// Spanner is the GCP resource URI of the spanner database instance to use.
 	Spanner string
@@ -119,13 +119,16 @@ func New(ctx context.Context, cfg Config, opts ...func(*tessera.StorageOptions))
 		opt.PushbackMaxOutstanding = DefaultPushbackMaxOutstanding
 	}
 
-	c, err := gcs.NewClient(ctx, gcs.WithJSONReads())
+	// TODO(phbnf): make sure we want to read the config like this.
+	sdkConfig, err := config.LoadDefaultConfig(context.TODO())
 	if err != nil {
-		return nil, fmt.Errorf("failed to create GCS client: %v", err)
+		return nil, fmt.Errorf("failed to load default AWS configuration: %v", err)
 	}
-	gcsStorage, err := newGCSStorage(ctx, c, cfg.ProjectID, cfg.Bucket)
+	c := s3.NewFromConfig(sdkConfig)
+
+	s3Storage, err := newS3Storage(ctx, c, cfg.ProjectID, cfg.Bucket)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create GCS storage: %v", err)
+		return nil, fmt.Errorf("failed to create S3 storage: %v", err)
 	}
 	seq, err := newSpannerSequencer(ctx, cfg.Spanner, uint64(opt.PushbackMaxOutstanding))
 	if err != nil {
@@ -133,10 +136,10 @@ func New(ctx context.Context, cfg Config, opts ...func(*tessera.StorageOptions))
 	}
 
 	r := &Storage{
-		gcsClient:   c,
+		s3Client:    c,
 		projectID:   cfg.ProjectID,
 		bucket:      cfg.Bucket,
-		objStore:    gcsStorage,
+		objStore:    s3Storage,
 		sequencer:   seq,
 		newCP:       opt.NewCP,
 		parseCP:     opt.ParseCP,
@@ -188,9 +191,9 @@ func (s *Storage) Get(ctx context.Context, path string) ([]byte, error) {
 
 // init ensures that the storage represents a log in a valid state.
 func (s *Storage) init(ctx context.Context) error {
-	cpRaw, err := s.Get(ctx, layout.CheckpointPath)
+	_, err := s.Get(ctx, layout.CheckpointPath)
 	if err != nil {
-		if errors.Is(err, gcs.ErrObjectNotExist) {
+		if errors.Is(err, &types.NoSuchKey{}) {
 			// No checkpoint exists, do a forced (possibly empty) integration to create one in a safe
 			// way (calling updateCP directly here would not be safe as it's outside the transactional
 			// framework which prevents the tree from rolling backwards or otherwise forking).
@@ -203,9 +206,10 @@ func (s *Storage) init(ctx context.Context) error {
 		}
 		return fmt.Errorf("failed to read checkpoint: %v", err)
 	}
-	if _, err = s.parseCP(cpRaw); err != nil {
-		return fmt.Errorf("Found invalid existing checpoint file: %v\ncheckpoint contents:\n%v", err, string(cpRaw))
-	}
+	// TODO(phboneff): add this back once the SCTFE has a verifier
+	//if _, err = s.parseCP(cpRaw); err != nil {
+	//	return fmt.Errorf("Found invalid existing checpoint file: %v\ncheckpoint contents:\n%v", err, string(cpRaw))
+	//}
 
 	return nil
 }
@@ -233,7 +237,7 @@ func (s *Storage) setTile(ctx context.Context, level, index, logSize uint64, til
 	tPath := layout.TilePath(level, index, logSize)
 	klog.V(2).Infof("StoreTile: %s (%d entries)", tPath, len(tile.Nodes))
 
-	return s.objStore.setObject(ctx, tPath, data, &gcs.Conditions{DoesNotExist: true}, logContType)
+	return s.objStore.setObject(ctx, tPath, data, &s3.PutObjectInput{IfNoneMatch: aws.String("*")}, logContType)
 }
 
 // getTiles returns the tiles with the given tile-coords for the specified log size.
@@ -249,7 +253,7 @@ func (s *Storage) getTiles(ctx context.Context, tileIDs []storage.TileID, logSiz
 			objName := layout.TilePath(id.Level, id.Index, logSize)
 			data, _, err := s.objStore.getObject(ctx, objName)
 			if err != nil {
-				if errors.Is(err, gcs.ErrObjectNotExist) {
+				if errors.Is(err, &types.NoSuchKey{}) {
 					// Depending on context, this may be ok.
 					// We'll signal to higher levels that it wasn't found by retuning a nil for this tile.
 					return nil
@@ -278,7 +282,7 @@ func (s *Storage) getEntryBundle(ctx context.Context, bundleIndex uint64, logSiz
 	objName := s.entriesPath(bundleIndex, logSize)
 	data, _, err := s.objStore.getObject(ctx, objName)
 	if err != nil {
-		if errors.Is(err, gcs.ErrObjectNotExist) {
+		if errors.Is(err, &types.NoSuchKey{}) {
 			// Return the generic NotExist error so that higher levels can differentiate
 			// between this and other errors.
 			return nil, fmt.Errorf("%v: %w", objName, os.ErrNotExist)
@@ -295,7 +299,7 @@ func (s *Storage) setEntryBundle(ctx context.Context, bundleIndex uint64, logSiz
 	// Note that setObject does an idempotent interpretation of DoesNotExist - it only
 	// returns an error if the named object exists _and_ contains different data to what's
 	// passed in here.
-	if err := s.objStore.setObject(ctx, objName, bundleRaw, &gcs.Conditions{DoesNotExist: true}, logContType); err != nil {
+	if err := s.objStore.setObject(ctx, objName, bundleRaw, &s3.PutObjectInput{IfNoneMatch: aws.String("*")}, logContType); err != nil {
 		return fmt.Errorf("setObject(%q): %v", objName, err)
 
 	}
@@ -649,70 +653,70 @@ func (s *spannerSequencer) consumeEntries(ctx context.Context, limit uint64, f c
 	return didWork, nil
 }
 
-// gcsStorage knows how to store and retrieve objects from GCS.
-type gcsStorage struct {
-	bucket    string
-	gcsClient *gcs.Client
+// s3Storage knows how to store and retrieve objects from S3.
+type s3Storage struct {
+	bucket   string
+	s3Client *s3.Client
 }
 
-// newGCSStorage creates a new gcsStorage.
+// newS3Storage creates a new s3Storage.
 //
 // The specified bucket must exist or an error will be returned.
-func newGCSStorage(ctx context.Context, c *gcs.Client, projectID string, bucket string) (*gcsStorage, error) {
-	r := &gcsStorage{
-		gcsClient: c,
-		bucket:    bucket,
+func newS3Storage(ctx context.Context, c *s3.Client, projectID string, bucket string) (*s3Storage, error) {
+	r := &s3Storage{
+		s3Client: c,
+		bucket:   bucket,
 	}
 
 	return r, nil
 }
 
-// getObject returns the data and generation of the specified object, or an error.
-func (s *gcsStorage) getObject(ctx context.Context, obj string) ([]byte, int64, error) {
-	r, err := s.gcsClient.Bucket(s.bucket).Object(obj).NewReader(ctx)
+// getObject returns the data and versionID of the specified object, or an error.
+func (s *s3Storage) getObject(ctx context.Context, obj string) ([]byte, string, error) {
+	r, err := s.s3Client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(obj),
+	})
 	if err != nil {
-		return nil, -1, fmt.Errorf("getObject: failed to create reader for object %q in bucket %q: %w", obj, s.bucket, err)
+		return nil, "", fmt.Errorf("getObject: failed to create reader for object %q in bucket %q: %w", obj, s.bucket, err)
 	}
 
-	d, err := io.ReadAll(r)
+	d, err := io.ReadAll(r.Body)
 	if err != nil {
-		return nil, -1, fmt.Errorf("failed to read %q: %v", obj, err)
+		return nil, "", fmt.Errorf("getObject: failed to read %q: %v", obj, err)
 	}
-	return d, r.Attrs.Generation, r.Close()
+	return d, *r.VersionId, r.Body.Close()
 }
 
 // setObject stores the provided data in the specified object, optionally gated by a condition.
 //
 // cond can be used to specify preconditions for the write (e.g. write iff not exists, write iff
-// current generation is X, etc.), or nil can be passed if no preconditions are desired.
+// current versionID is X, etc.), or nil can be passed if no preconditions are desired.
 //
 // Note that when preconditions are specified and are not met, an error will be returned *unless*
 // the currently stored data is bit-for-bit identical to the data to-be-written.
 // This is intended to provide idempotentency for writes.
-func (s *gcsStorage) setObject(ctx context.Context, objName string, data []byte, cond *gcs.Conditions, contType string) error {
-	bkt := s.gcsClient.Bucket(s.bucket)
-	obj := bkt.Object(objName)
-
-	var w *gcs.Writer
-	if cond == nil {
-		w = obj.NewWriter(ctx)
-
-	} else {
-		w = obj.If(*cond).NewWriter(ctx)
-	}
-	w.ObjectAttrs.ContentType = contType
-	if _, err := w.Write(data); err != nil {
-		return fmt.Errorf("failed to write object %q to bucket %q: %w", objName, s.bucket, err)
+func (s *s3Storage) setObject(ctx context.Context, objName string, data []byte, cond *s3.PutObjectInput, contType string) error {
+	put := &s3.PutObjectInput{
+		Bucket:      aws.String(s.bucket),
+		Key:         aws.String(objName),
+		Body:        bytes.NewReader(data),
+		ContentType: aws.String(contType),
 	}
 
-	if err := w.Close(); err != nil {
+	if cond != nil && cond.IfNoneMatch != nil {
+		put.IfNoneMatch = cond.IfNoneMatch
+	}
+	if _, err := s.s3Client.PutObject(ctx, put); err != nil {
+
 		// If we run into a precondition failure error, check that the object
 		// which exists contains the same content that we want to write.
 		// If so, we can consider this write to be idempotently successful.
-		if ee, ok := err.(*googleapi.Error); ok && ee.Code == http.StatusPreconditionFailed {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) && apiErr.ErrorCode() == "PreconditionFailed" {
 			existing, existingGen, err := s.getObject(ctx, objName)
 			if err != nil {
-				return fmt.Errorf("failed to fetch existing content for %q (@%d): %v", objName, existingGen, err)
+				return fmt.Errorf("failed to fetch existing content for %q (@%s): %v", objName, existingGen, err)
 			}
 			if !bytes.Equal(existing, data) {
 				klog.Errorf("Resource %q non-idempotent write:\n%s", objName, cmp.Diff(existing, data))
@@ -723,7 +727,7 @@ func (s *gcsStorage) setObject(ctx context.Context, objName string, data []byte,
 			return nil
 		}
 
-		return fmt.Errorf("failed to close write on %q: %v", objName, err)
+		return fmt.Errorf("failed to write object %q to bucket %q: %w", objName, s.bucket, err)
 	}
 	return nil
 }
