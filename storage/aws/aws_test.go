@@ -28,11 +28,12 @@ import (
 	"cloud.google.com/go/spanner/spannertest"
 	"cloud.google.com/go/spanner/spansql"
 	gcs "cloud.google.com/go/storage"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/go-cmp/cmp"
 	tessera "github.com/transparency-dev/trillian-tessera"
 	"github.com/transparency-dev/trillian-tessera/api"
 	"github.com/transparency-dev/trillian-tessera/api/layout"
-	"github.com/transparency-dev/trillian-tessera/storage/internal"
+	storage "github.com/transparency-dev/trillian-tessera/storage/internal"
 )
 
 func newSpannerDB(t *testing.T) func() {
@@ -315,25 +316,25 @@ func newMemObjStore() *memObjStore {
 	}
 }
 
-func (m *memObjStore) getObject(_ context.Context, obj string) ([]byte, int64, error) {
+func (m *memObjStore) getObject(_ context.Context, obj string) ([]byte, string, error) {
 	m.RLock()
 	defer m.RUnlock()
 
 	d, ok := m.mem[obj]
 	if !ok {
-		return nil, -1, fmt.Errorf("obj %q not found: %w", obj, gcs.ErrObjectNotExist)
+		return nil, "", fmt.Errorf("obj %q not found: %w", obj, gcs.ErrObjectNotExist)
 	}
-	return d, 1, nil
+	return d, "1", nil
 }
 
 // TODO(phboneff): add content type tests
-func (m *memObjStore) setObject(_ context.Context, obj string, data []byte, cond *gcs.Conditions, _ string) error {
+func (m *memObjStore) setObject(_ context.Context, obj string, data []byte, cond *s3.PutObjectInput, _ string) error {
 	m.Lock()
 	defer m.Unlock()
 
 	d, ok := m.mem[obj]
 	if cond != nil {
-		if ok && cond.DoesNotExist {
+		if ok && cond.IfNoneMatch != nil && *cond.IfNoneMatch != "*" {
 			if !bytes.Equal(d, data) {
 				return errors.New("precondition failed and data not identical")
 			}

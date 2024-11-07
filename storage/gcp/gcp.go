@@ -46,7 +46,7 @@ import (
 	tessera "github.com/transparency-dev/trillian-tessera"
 	"github.com/transparency-dev/trillian-tessera/api"
 	"github.com/transparency-dev/trillian-tessera/api/layout"
-	"github.com/transparency-dev/trillian-tessera/storage/internal"
+	storage "github.com/transparency-dev/trillian-tessera/storage/internal"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
@@ -123,7 +123,7 @@ func New(ctx context.Context, cfg Config, opts ...func(*tessera.StorageOptions))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GCS client: %v", err)
 	}
-	gcsStorage, err := newGCSStorage(ctx, c, cfg.ProjectID, cfg.Bucket)
+	gcsStorage, err := newGCSStorage(c, cfg.Bucket)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GCS storage: %v", err)
 	}
@@ -658,7 +658,7 @@ type gcsStorage struct {
 // newGCSStorage creates a new gcsStorage.
 //
 // The specified bucket must exist or an error will be returned.
-func newGCSStorage(ctx context.Context, c *gcs.Client, projectID string, bucket string) (*gcsStorage, error) {
+func newGCSStorage(c *gcs.Client, bucket string) (*gcsStorage, error) {
 	r := &gcsStorage{
 		gcsClient: c,
 		bucket:    bucket,
