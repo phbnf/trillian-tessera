@@ -31,11 +31,13 @@ package aws
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/gob"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -49,9 +51,9 @@ import (
 	"github.com/transparency-dev/trillian-tessera/api/layout"
 	storage "github.com/transparency-dev/trillian-tessera/storage/internal"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/api/iterator"
-	"google.golang.org/grpc/codes"
 	"k8s.io/klog/v2"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 const (
@@ -108,8 +110,8 @@ type Config struct {
 	ProjectID string
 	// Bucket is the name of the S3 bucket to use for storing log state.
 	Bucket string
-	// Spanner is the GCP resource URI of the spanner database instance to use.
-	Spanner string
+	// AuroraDSN is the DSN of the AuroraDB instance to use.
+	AuroraDSN string
 }
 
 // New creates a new instance of the AWS based Storage.
@@ -129,7 +131,7 @@ func New(ctx context.Context, cfg Config, opts ...func(*tessera.StorageOptions))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create S3 storage: %v", err)
 	}
-	seq, err := newSpannerSequencer(ctx, cfg.Spanner, uint64(opt.PushbackMaxOutstanding))
+	seq, err := newAuroraSequencer(ctx, cfg.AuroraDSN, uint64(opt.PushbackMaxOutstanding))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Spanner sequencer: %v", err)
 	}
@@ -418,21 +420,64 @@ func (s *Storage) updateEntryBundles(ctx context.Context, fromSeq uint64, entrie
 	return seqErr.Wait()
 }
 
-// spannerSequencer uses Cloud Spanner to provide
+// AuroraSequencer uses AuroraDB to provide
 // a durable and thread/multi-process safe sequencer.
-type spannerSequencer struct {
-	dbPool         *spanner.Client
+type AuroraSequencer struct {
+	dbPool         *sql.DB
 	maxOutstanding uint64
 }
 
-// new SpannerSequencer returns a new spannerSequencer struct which uses the provided
-// spanner resource name for its spanner connection.
-func newSpannerSequencer(ctx context.Context, spannerDB string, maxOutstanding uint64) (*spannerSequencer, error) {
-	dbPool, err := spanner.NewClient(ctx, spannerDB)
+// initAuroraDB
+func initAuroraDB(ctx context.Context, dsn string) (*sql.DB, error) {
+
+	dbPool, err := sql.Open("mysql", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to Spanner: %v", err)
+		return nil, fmt.Errorf("failed to open CloudSQL: %v", err)
 	}
-	r := &spannerSequencer{
+
+	if err := initDB(ctx, dbPool); err != nil {
+		return nil, fmt.Errorf("failed to init DB: %v", err)
+	}
+	return dbPool, nil
+}
+
+func initDB(ctx context.Context, dbPool *sql.DB) error {
+	if _, err := dbPool.ExecContext(ctx,
+		`CREATE TABLE IF NOT EXISTS SeqCoord(
+			id INT UNSIGNED NOT NULL,
+			next BIGINT UNSIGNED NOT NULL,
+			PRIMARY KEY (id)
+		)`); err != nil {
+		return err
+	}
+	if _, err := dbPool.ExecContext(ctx,
+		`CREATE TABLE IF NOT EXISTS Seq(
+			id INT UNSIGNED NOT NULL,
+			seq BIGINT UNSIGNED NOT NULL,
+			v LONGBLOB,
+			PRIMARY KEY (id, seq)
+		)`); err != nil {
+		return err
+	}
+	if _, err := dbPool.ExecContext(ctx,
+		`CREATE TABLE IF NOT EXISTS IntCoord(
+			id INT UNSIGNED NOT NULL,
+			seq BIGINT UNSIGNED NOT NULL,
+			PRIMARY KEY (id)
+		)`); err != nil {
+		return err
+	}
+	return nil
+}
+
+// new SpannerSequencer returns a new spannerSequencer struct which uses the provided
+// auroraDSN for its AuroraDB connection.
+func newAuroraSequencer(ctx context.Context, auroraDSN string, maxOutstanding uint64) (*AuroraSequencer, error) {
+	dbPool, err := initAuroraDB(ctx, auroraDSN)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to AuroraDB: %v", err)
+	}
+	r := &AuroraSequencer{
 		dbPool:         dbPool,
 		maxOutstanding: maxOutstanding,
 	}
@@ -457,8 +502,9 @@ func newSpannerSequencer(ctx context.Context, spannerDB string, maxOutstanding u
 //     Seq into the committed tree state.
 //
 // The database and schema should be created externally, e.g. by terraform.
-func (s *spannerSequencer) initDB(ctx context.Context) error {
+func (s *AuroraSequencer) initDB(ctx context.Context) error {
 
+	//TODO(phboneff): change reference schema
 	/* Schema for reference:
 	CREATE TABLE SeqCoord (
 	 id INT64 NOT NULL,
@@ -481,10 +527,13 @@ func (s *spannerSequencer) initDB(ctx context.Context) error {
 	// sequencing and integration to occur.
 	// Note that this will only succeed if no row exists, so there's no danger
 	// of "resetting" an existing log.
-	if _, err := s.dbPool.Apply(ctx, []*spanner.Mutation{spanner.Insert("SeqCoord", []string{"id", "next"}, []interface{}{0, 0})}); err != nil && spanner.ErrCode(err) != codes.AlreadyExists {
+	// TODO(phboneff): filer error code if it already exists
+	if _, err := s.dbPool.ExecContext(ctx,
+		`INSERT IGNORE INTO SeqCoord (id, next) VALUES (0, 0)`); err != nil {
 		return err
 	}
-	if _, err := s.dbPool.Apply(ctx, []*spanner.Mutation{spanner.Insert("IntCoord", []string{"id", "seq"}, []interface{}{0, 0})}); err != nil && spanner.ErrCode(err) != codes.AlreadyExists {
+	if _, err := s.dbPool.ExecContext(ctx,
+		`INSERT IGNORE INTO IntCoord (id, seq) VALUES (0, 0)`); err != nil {
 		return err
 	}
 	return nil
@@ -495,74 +544,82 @@ func (s *spannerSequencer) initDB(ctx context.Context) error {
 // Entries are allocated contiguous indices, in the order in which they appear in the entries parameter.
 // This is achieved by storing the passed-in entries in the Seq table in Spanner, keyed by the
 // index assigned to the first entry in the batch.
-func (s *spannerSequencer) assignEntries(ctx context.Context, entries []*tessera.Entry) error {
+func (s *AuroraSequencer) assignEntries(ctx context.Context, entries []*tessera.Entry) error {
 	// First grab the treeSize in a non-locking read-only fashion (we don't want to block/collide with integration).
 	// We'll use this value to determine whether we need to apply back-pressure.
-	var treeSize int64
-	if row, err := s.dbPool.Single().ReadRow(ctx, "IntCoord", spanner.Key{0}, []string{"seq"}); err != nil {
-		return err
-	} else {
-		if err := row.Column(0, &treeSize); err != nil {
-			return fmt.Errorf("failed to read integration coordination info: %v", err)
-		}
-	}
+	var treeSize uint64
 
-	var next int64 // Unfortunately, Spanner doesn't support uint64 so we'll have to cast around a bit.
-
-	_, err := s.dbPool.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
-		// First we need to grab the next available sequence number from the SeqCoord table.
-		row, err := txn.ReadRowWithOptions(ctx, "SeqCoord", spanner.Key{0}, []string{"id", "next"}, &spanner.ReadOptions{LockHint: spannerpb.ReadRequest_LOCK_HINT_EXCLUSIVE})
-		if err != nil {
-			return fmt.Errorf("failed to read SeqCoord: %v", err)
-		}
-		var id int64
-		if err := row.Columns(&id, &next); err != nil {
-			return fmt.Errorf("failed to parse id column: %v", err)
-		}
-
-		// Check whether there are too many outstanding entries and we should apply
-		// back-pressure.
-		if outstanding := next - treeSize; outstanding > int64(s.maxOutstanding) {
-			return tessera.ErrPushback
-		}
-
-		next := uint64(next) // Shadow next with a uint64 version of the same value to save on casts.
-		sequencedEntries := make([]storage.SequencedEntry, len(entries))
-		// Assign provisional sequence numbers to entries.
-		// We need to do this here in order to support serialisations which include the log position.
-		for i, e := range entries {
-			sequencedEntries[i] = storage.SequencedEntry{
-				BundleData: e.MarshalBundleData(next + uint64(i)),
-				LeafHash:   e.LeafHash(),
-			}
-		}
-
-		// Flatten the entries into a single slice of bytes which we can store in the Seq.v column.
-		b := &bytes.Buffer{}
-		e := gob.NewEncoder(b)
-		if err := e.Encode(sequencedEntries); err != nil {
-			return fmt.Errorf("failed to serialise batch: %v", err)
-		}
-		data := b.Bytes()
-		num := len(entries)
-
-		// TODO(al): think about whether aligning bundles to tile boundaries would be a good idea or not.
-		m := []*spanner.Mutation{
-			// Insert our newly sequenced batch of entries into Seq,
-			spanner.Insert("Seq", []string{"id", "seq", "v"}, []interface{}{0, int64(next), data}),
-			// and update the next-available sequence number row in SeqCoord.
-			spanner.Update("SeqCoord", []string{"id", "next"}, []interface{}{0, int64(next) + int64(num)}),
-		}
-		if err := txn.BufferWrite(m); err != nil {
-			return fmt.Errorf("failed to apply TX: %v", err)
-		}
-
+	// TODO(phboneff): do I need to do a transation? A simple read should be enough.
+	row := s.dbPool.QueryRowContext(ctx, "SELECT seq FROM IntCoord WHERE id = ? FOR UPDATE", 0)
+	if err := row.Scan(&treeSize); err == sql.ErrNoRows {
 		return nil
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to flush batch: %w", err)
+	} else if err != nil {
+		return fmt.Errorf("failed to read integration coordination info: %v", err)
 	}
+
+	// TODO(phboneff): better handle int64
+	var next uint64 // Unfortunately, Spanner doesn't support uint64 so we'll have to cast around a bit.
+	var id uint64
+
+	tx, err := s.dbPool.BeginTx(ctx, nil)
+	if err != nil {
+		// TODO(phboneff): edit message
+		return fmt.Errorf("failed to begin tx: %v", err)
+	}
+	defer func() {
+		if tx != nil {
+			tx.Rollback()
+		}
+	}()
+
+	//	_, err = s.dbPool.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
+	// First we need to grab the next available sequence number from the SeqCoord table.
+	//row, err := tx.ReadRowWithOptions(ctx, "SeqCoord", spanner.Key{0}, []string{"id", "next"}, &spanner.ReadOptions{LockHint: spannerpb.ReadRequest_LOCK_HINT_EXCLUSIVE})
+	// TODO(phbneff): lockhint what is thisfor?
+	r := tx.QueryRowContext(ctx, "SELECT id, next FROM SeqCoord WHERE id = ? FOR UPDATE", 0)
+	if err := r.Scan(&id, &next); err != nil {
+		return fmt.Errorf("failed to read seqcoord: %v", err)
+	}
+
+	// Check whether there are too many outstanding entries and we should apply
+	// back-pressure.
+	if outstanding := next - treeSize; outstanding > s.maxOutstanding {
+		return tessera.ErrPushback
+	}
+
+	sequencedEntries := make([]storage.SequencedEntry, len(entries))
+	// Assign provisional sequence numbers to entries.
+	// We need to do this here in order to support serialisations which include the log position.
+	for i, e := range entries {
+		sequencedEntries[i] = storage.SequencedEntry{
+			BundleData: e.MarshalBundleData(next + uint64(i)),
+			LeafHash:   e.LeafHash(),
+		}
+	}
+
+	// Flatten the entries into a single slice of bytes which we can store in the Seq.v column.
+	b := &bytes.Buffer{}
+	e := gob.NewEncoder(b)
+	if err := e.Encode(sequencedEntries); err != nil {
+		return fmt.Errorf("failed to serialise batch: %v", err)
+	}
+	data := b.Bytes()
+	num := len(entries)
+
+	// Insert our newly sequenced batch of entries into Seq,
+	if _, err := tx.ExecContext(ctx, "INSERT INTO Seq(id, seq, v) VALUES(?, ?, ?)", 0, next, data); err != nil {
+		return fmt.Errorf("insert into seq: %v", err)
+	}
+	// and update the next-available sequence number row in SeqCoord.
+	if _, err := tx.ExecContext(ctx, "UPDATE SeqCoord SET next = ? WHERE ID = ?", next+uint64(num), 0); err != nil {
+		return fmt.Errorf("update seqcoord: %v", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit TX: %v", err)
+	}
+	// TODO(phboneff): do I need this? This has something to do with rollback.
+	tx = nil
 
 	return nil
 }
@@ -573,86 +630,103 @@ func (s *spannerSequencer) assignEntries(ctx context.Context, entries []*tessera
 // removed from the Seq table.
 //
 // Returns true if some entries were consumed as a weak signal that there may be further entries waiting to be consumed.
-func (s *spannerSequencer) consumeEntries(ctx context.Context, limit uint64, f consumeFunc, forceUpdate bool) (bool, error) {
-	didWork := false
-	_, err := s.dbPool.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
-		// Figure out which is the starting index of sequenced entries to start consuming from.
-		row, err := txn.ReadRowWithOptions(ctx, "IntCoord", spanner.Key{0}, []string{"seq"}, &spanner.ReadOptions{LockHint: spannerpb.ReadRequest_LOCK_HINT_EXCLUSIVE})
-		if err != nil {
-			return err
-		}
-		var fromSeq int64 // Spanner doesn't support uint64
-		if err := row.Column(0, &fromSeq); err != nil {
-			return fmt.Errorf("failed to read integration coordination info: %v", err)
-		}
-		klog.V(1).Infof("Consuming from %d", fromSeq)
-
-		// Now read the sequenced starting at the index we got above.
-		rows := txn.ReadWithOptions(ctx, "Seq",
-			spanner.KeyRange{Start: spanner.Key{0, fromSeq}, End: spanner.Key{0, fromSeq + int64(limit)}},
-			[]string{"seq", "v"},
-			&spanner.ReadOptions{LockHint: spannerpb.ReadRequest_LOCK_HINT_EXCLUSIVE})
-		defer rows.Stop()
-
-		seqsConsumed := []int64{}
-		entries := make([]storage.SequencedEntry, 0, limit)
-		orderCheck := fromSeq
-		for {
-			row, err := rows.Next()
-			if row == nil || err == iterator.Done {
-				break
-			}
-
-			var vGob []byte
-			var seq int64 // spanner doesn't have uint64
-			if err := row.Columns(&seq, &vGob); err != nil {
-				return fmt.Errorf("failed to scan seq row: %v", err)
-			}
-
-			if orderCheck != seq {
-				return fmt.Errorf("integrity fail - expected seq %d, but found %d", orderCheck, seq)
-			}
-
-			g := gob.NewDecoder(bytes.NewReader(vGob))
-			b := []storage.SequencedEntry{}
-			if err := g.Decode(&b); err != nil {
-				return fmt.Errorf("failed to deserialise v: %v", err)
-			}
-			entries = append(entries, b...)
-			seqsConsumed = append(seqsConsumed, seq)
-			orderCheck += int64(len(b))
-		}
-		if len(seqsConsumed) == 0 && !forceUpdate {
-			klog.V(1).Info("Found no rows to sequence")
-			return nil
-		}
-
-		// Call consumeFunc with the entries we've found
-		if err := f(ctx, uint64(fromSeq), entries); err != nil {
-			return err
-		}
-
-		// consumeFunc was successful, so we can update our coordination row, and delete the row(s) for
-		// the then consumed entries.
-		m := make([]*spanner.Mutation, 0)
-		m = append(m, spanner.Update("IntCoord", []string{"id", "seq"}, []interface{}{0, int64(orderCheck)}))
-		for _, c := range seqsConsumed {
-			m = append(m, spanner.Delete("Seq", spanner.Key{0, c}))
-		}
-		if len(m) > 0 {
-			if err := txn.BufferWrite(m); err != nil {
-				return err
-			}
-		}
-
-		didWork = true
-		return nil
-	})
+func (s *AuroraSequencer) consumeEntries(ctx context.Context, limit uint64, f consumeFunc, forceUpdate bool) (bool, error) {
+	tx, err := s.dbPool.BeginTx(ctx, nil)
 	if err != nil {
+		// TODO(phboneff): edit message
+		return false, fmt.Errorf("failed to begin tx: %v", err)
+	}
+	defer func() {
+		if tx != nil {
+			tx.Rollback()
+		}
+	}()
+	//	_, err = s.dbPool.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
+	// Figure out which is the starting index of sequenced entries to start consuming from.
+	// TODO(phboeff): LOCK_HINT_EXCLUSIVE
+	row := tx.QueryRowContext(ctx, "SELECT seq FROM IntCoord WHERE id = ? FOR UPDATE", 0)
+	var fromSeq uint64
+	if err := row.Scan(&fromSeq); err == sql.ErrNoRows {
+		return false, nil
+	} else if err != nil {
+		return false, fmt.Errorf("failed to read coord info: %v", err)
+	}
+	klog.V(1).Infof("Consuming from %d", fromSeq)
+
+	// Now read the sequenced starting at the index we got above.
+	// TODO(phboneff) LOCK_HINT_EXCLUSIVE
+	// TODO(phboneff) remove the limit?
+	rows, err := tx.QueryContext(ctx, "SELECT seq, v FROM Seq WHERE id = ? AND seq >= ? ORDER BY SEQ LIMIT 10 FOR UPDATE", 0, fromSeq)
+	if err != nil {
+		return false, fmt.Errorf("failed to read Seq: %v", err)
+	}
+	// TODO(phboneff): what is thi for?
+	defer rows.Close()
+
+	// TODO(phboneff): do we really need any here
+	seqsConsumed := []any{}
+	entries := make([]storage.SequencedEntry, 0, limit)
+	orderCheck := fromSeq
+	for rows.Next() {
+
+		var vGob []byte
+		var seq uint64
+		if err := rows.Scan(&seq, &vGob); err != nil {
+			return false, fmt.Errorf("failed to scan seq row: %v", err)
+		}
+
+		if orderCheck != seq {
+			return false, fmt.Errorf("integrity fail - expected seq %d, but found %d", orderCheck, seq)
+		}
+
+		g := gob.NewDecoder(bytes.NewReader(vGob))
+		b := []storage.SequencedEntry{}
+		if err := g.Decode(&b); err != nil {
+			return false, fmt.Errorf("failed to deserialise v: %v", err)
+		}
+		entries = append(entries, b...)
+		seqsConsumed = append(seqsConsumed, seq)
+		orderCheck += uint64(len(b))
+	}
+	if len(seqsConsumed) == 0 && !forceUpdate {
+		klog.V(1).Info("Found no rows to sequence")
+		return false, nil
+	}
+
+	// Call consumeFunc with the entries we've found
+	if err := f(ctx, uint64(fromSeq), entries); err != nil {
 		return false, err
 	}
 
-	return didWork, nil
+	// consumeFunc was successful, so we can update our coordination row, and delete the row(s) for
+	// the then consumed entries.
+	// TODO(phboneff): should it be maybe a separate transaction? That would introduce other funny things.
+	if _, err := tx.ExecContext(ctx, "UPDATE IntCoord SET Seq=? WHERE ID=?", orderCheck, 0); err != nil {
+		return false, fmt.Errorf("update intcoord: %v", err)
+	}
+
+	if len(seqsConsumed) > 0 {
+		q := "DELETE FROM Seq WHERE ID=? AND seq IN ( " + placeholder(len(seqsConsumed)) + " )"
+		if _, err := tx.ExecContext(ctx, q, append([]any{0}, seqsConsumed...)...); err != nil {
+			klog.Infof("Q: %s", q)
+			return false, fmt.Errorf("update intcoord: %v", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("failed to commit TX: %v", err)
+	}
+	tx = nil
+
+	return true, nil
+}
+
+func placeholder(n int) string {
+	places := make([]string, n)
+	for i := 0; i < n; i++ {
+		places[i] = "?"
+	}
+	return strings.Join(places, ",")
 }
 
 // s3Storage knows how to store and retrieve objects from S3.
