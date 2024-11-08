@@ -809,3 +809,7 @@ func (s *s3Storage) setObject(ctx context.Context, objName string, data []byte, 
 	}
 	return nil
 }
+
+func (s *Storage) ReadObject(ctx context.Context, objName string) ([]byte, string, error) {
+	return s.objStore.getObject(ctx, objName)
+}

@@ -93,6 +93,26 @@ func main() {
 		_, _ = w.Write([]byte(fmt.Sprintf("%d", idx)))
 	})
 
+	http.HandleFunc("GET /checkpoint", func(w http.ResponseWriter, r *http.Request) {
+		cp, _, err := storage.ReadObject(ctx, "checkpoint")
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(fmt.Sprintf("Failed to read checkpoint: %v", err)))
+			return
+		}
+		w.Write(cp)
+	})
+
+	http.HandleFunc("GET /tile/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		tile, _, err := storage.ReadObject(ctx, r.URL.Path[1:])
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(fmt.Sprintf("Failed to read file: %v", err)))
+			return
+		}
+		w.Write(tile)
+	})
+
 	h2s := &http2.Server{}
 	h1s := &http.Server{
 		Addr:    *listen,
