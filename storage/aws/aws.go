@@ -63,7 +63,7 @@ const (
 	DefaultIntegrationSizeLimit   = 5 * 4096
 )
 
-// Storage is a GCP based storage implementation for Tessera.
+// Storage is a AWS based storage implementation for Tessera.
 type Storage struct {
 	gcsClient *gcs.Client
 
@@ -102,9 +102,9 @@ type sequencer interface {
 // consumeFunc is the signature of a function which can consume entries from the sequencer.
 type consumeFunc func(ctx context.Context, from uint64, entries []storage.SequencedEntry) error
 
-// Config holds GCP project and resource configuration for a storage instance.
+// Config holds AWS project and resource configuration for a storage instance.
 type Config struct {
-	// ProjectID is the GCP project which hosts the storage bucket and Spanner database for the log.
+	// ProjectID is the AWS project which hosts the storage bucket and Spanner database for the log.
 	ProjectID string
 	// Bucket is the name of the GCS bucket to use for storing log state.
 	Bucket string
@@ -112,7 +112,7 @@ type Config struct {
 	Spanner string
 }
 
-// New creates a new instance of the GCP based Storage.
+// New creates a new instance of the AWS based Storage.
 func New(ctx context.Context, cfg Config, opts ...func(*tessera.StorageOptions)) (*Storage, error) {
 	opt := tessera.ResolveStorageOptions(opts...)
 	if opt.PushbackMaxOutstanding == 0 {
