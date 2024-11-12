@@ -512,20 +512,16 @@ func (s *AuroraSequencer) assignEntries(ctx context.Context, entries []*tessera.
 	// First grab the treeSize in a non-locking read-only fashion (we don't want to block/collide with integration).
 	// We'll use this value to determine whether we need to apply back-pressure.
 	var treeSize uint64
-
-	// TODO(phboneff): do I need to do a transation? A simple read should be enough.
-	row := s.dbPool.QueryRowContext(ctx, "SELECT seq FROM IntCoord WHERE id = ? FOR UPDATE", 0)
+	row := s.dbPool.QueryRowContext(ctx, "SELECT seq FROM IntCoord WHERE id = ?", 0)
 	if err := row.Scan(&treeSize); err == sql.ErrNoRows {
 		return nil
 	} else if err != nil {
 		return fmt.Errorf("failed to read integration coordination info: %v", err)
 	}
 
-	var next, id uint64
-
+	// Now move on with sequencing in a single transaction
 	tx, err := s.dbPool.BeginTx(ctx, nil)
 	if err != nil {
-		// TODO(phboneff): edit message
 		return fmt.Errorf("failed to begin tx: %v", err)
 	}
 	defer func() {
@@ -535,6 +531,7 @@ func (s *AuroraSequencer) assignEntries(ctx context.Context, entries []*tessera.
 	}()
 
 	// First we need to grab the next available sequence number from the SeqCoord table.
+	var next, id uint64
 	r := tx.QueryRowContext(ctx, "SELECT id, next FROM SeqCoord WHERE id = ? FOR UPDATE", 0)
 	if err := r.Scan(&id, &next); err != nil {
 		return fmt.Errorf("failed to read seqcoord: %v", err)
@@ -575,9 +572,8 @@ func (s *AuroraSequencer) assignEntries(ctx context.Context, entries []*tessera.
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit TX: %v", err)
+		return fmt.Errorf("failed to commit tx: %v", err)
 	}
-	// TODO(phboneff): do I need this? This has something to do with rollback.
 	tx = nil
 
 	return nil
