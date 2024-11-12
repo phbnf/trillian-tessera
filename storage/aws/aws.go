@@ -427,60 +427,19 @@ type AuroraSequencer struct {
 	maxOutstanding uint64
 }
 
-// initAuroraDB
-func initAuroraDB(ctx context.Context, dsn string) (*sql.DB, error) {
-
-	dbPool, err := sql.Open("mysql", dsn)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open CloudSQL: %v", err)
-	}
-
-	if err := initDB(ctx, dbPool); err != nil {
-		return nil, fmt.Errorf("failed to init DB: %v", err)
-	}
-	return dbPool, nil
-}
-
-func initDB(ctx context.Context, dbPool *sql.DB) error {
-	if _, err := dbPool.ExecContext(ctx,
-		`CREATE TABLE IF NOT EXISTS SeqCoord(
-			id INT UNSIGNED NOT NULL,
-			next BIGINT UNSIGNED NOT NULL,
-			PRIMARY KEY (id)
-		)`); err != nil {
-		return err
-	}
-	if _, err := dbPool.ExecContext(ctx,
-		`CREATE TABLE IF NOT EXISTS Seq(
-			id INT UNSIGNED NOT NULL,
-			seq BIGINT UNSIGNED NOT NULL,
-			v LONGBLOB,
-			PRIMARY KEY (id, seq)
-		)`); err != nil {
-		return err
-	}
-	if _, err := dbPool.ExecContext(ctx,
-		`CREATE TABLE IF NOT EXISTS IntCoord(
-			id INT UNSIGNED NOT NULL,
-			seq BIGINT UNSIGNED NOT NULL,
-			PRIMARY KEY (id)
-		)`); err != nil {
-		return err
-	}
-	return nil
-}
-
 // new SpannerSequencer returns a new spannerSequencer struct which uses the provided
 // auroraDSN for its AuroraDB connection.
 func newAuroraSequencer(ctx context.Context, auroraDSN string, maxOutstanding uint64) (*AuroraSequencer, error) {
-	dbPool, err := initAuroraDB(ctx, auroraDSN)
+	dbPool, err := sql.Open("mysql", auroraDSN)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to AuroraDB: %v", err)
 	}
+
 	r := &AuroraSequencer{
 		dbPool:         dbPool,
 		maxOutstanding: maxOutstanding,
 	}
+
 	if err := r.initDB(ctx); err != nil {
 		return nil, fmt.Errorf("failed to initDB: %v", err)
 	}
@@ -488,6 +447,8 @@ func newAuroraSequencer(ctx context.Context, auroraDSN string, maxOutstanding ui
 }
 
 // initDB ensures that the coordination DB is initialised correctly.
+//
+// It creates tables if they don't exist already, and inserts zero values.
 //
 // The database schema consists of 3 tables:
 //   - SeqCoord
@@ -500,34 +461,37 @@ func newAuroraSequencer(ctx context.Context, auroraDSN string, maxOutstanding ui
 //   - IntCoord
 //     This table coordinates integration of the batches of entries stored in
 //     Seq into the committed tree state.
-//
-// The database and schema should be created externally, e.g. by terraform.
 func (s *AuroraSequencer) initDB(ctx context.Context) error {
-
-	//TODO(phboneff): change reference schema
-	/* Schema for reference:
-	CREATE TABLE SeqCoord (
-	 id INT64 NOT NULL,
-	 next INT64 NOT NULL,
-	) PRIMARY KEY (id);
-
-	CREATE TABLE Seq (
-		id INT64 NOT NULL,
-		seq INT64 NOT NULL,
-		v BYTES(MAX),
-	) PRIMARY KEY (id, seq);
-
-	CREATE TABLE IntCoord (
-		id INT64 NOT NULL,
-		seq INT64 NOT NULL,
-	) PRIMARY KEY (id);
-	*/
+	if _, err := s.dbPool.ExecContext(ctx,
+		`CREATE TABLE IF NOT EXISTS SeqCoord(
+			id INT UNSIGNED NOT NULL,
+			next BIGINT UNSIGNED NOT NULL,
+			PRIMARY KEY (id)
+		)`); err != nil {
+		return err
+	}
+	if _, err := s.dbPool.ExecContext(ctx,
+		`CREATE TABLE IF NOT EXISTS Seq(
+			id INT UNSIGNED NOT NULL,
+			seq BIGINT UNSIGNED NOT NULL,
+			v LONGBLOB,
+			PRIMARY KEY (id, seq)
+		)`); err != nil {
+		return err
+	}
+	if _, err := s.dbPool.ExecContext(ctx,
+		`CREATE TABLE IF NOT EXISTS IntCoord(
+			id INT UNSIGNED NOT NULL,
+			seq BIGINT UNSIGNED NOT NULL,
+			PRIMARY KEY (id)
+		)`); err != nil {
+		return err
+	}
 
 	// Set default values for a newly initialised schema - these rows being present are a precondition for
 	// sequencing and integration to occur.
 	// Note that this will only succeed if no row exists, so there's no danger
 	// of "resetting" an existing log.
-	// TODO(phboneff): filer error code if it already exists
 	if _, err := s.dbPool.ExecContext(ctx,
 		`INSERT IGNORE INTO SeqCoord (id, next) VALUES (0, 0)`); err != nil {
 		return err
