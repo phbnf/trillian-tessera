@@ -536,10 +536,7 @@ func (s *AuroraSequencer) assignEntries(ctx context.Context, entries []*tessera.
 		}
 	}()
 
-	//	_, err = s.dbPool.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
 	// First we need to grab the next available sequence number from the SeqCoord table.
-	//row, err := tx.ReadRowWithOptions(ctx, "SeqCoord", spanner.Key{0}, []string{"id", "next"}, &spanner.ReadOptions{LockHint: spannerpb.ReadRequest_LOCK_HINT_EXCLUSIVE})
-	// TODO(phbneff): lockhint what is thisfor?
 	r := tx.QueryRowContext(ctx, "SELECT id, next FROM SeqCoord WHERE id = ? FOR UPDATE", 0)
 	if err := r.Scan(&id, &next); err != nil {
 		return fmt.Errorf("failed to read seqcoord: %v", err)
@@ -607,7 +604,6 @@ func (s *AuroraSequencer) consumeEntries(ctx context.Context, limit uint64, f co
 	}()
 	//	_, err = s.dbPool.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
 	// Figure out which is the starting index of sequenced entries to start consuming from.
-	// TODO(phboeff): LOCK_HINT_EXCLUSIVE
 	row := tx.QueryRowContext(ctx, "SELECT seq FROM IntCoord WHERE id = ? FOR UPDATE", 0)
 	var fromSeq uint64
 	if err := row.Scan(&fromSeq); err == sql.ErrNoRows {
@@ -618,7 +614,6 @@ func (s *AuroraSequencer) consumeEntries(ctx context.Context, limit uint64, f co
 	klog.V(1).Infof("Consuming from %d", fromSeq)
 
 	// Now read the sequenced starting at the index we got above.
-	// TODO(phboneff) LOCK_HINT_EXCLUSIVE
 	// TODO(phboneff) remove the limit?
 	rows, err := tx.QueryContext(ctx, "SELECT seq, v FROM Seq WHERE id = ? AND seq >= ? ORDER BY SEQ LIMIT 10 FOR UPDATE", 0, fromSeq)
 	if err != nil {
