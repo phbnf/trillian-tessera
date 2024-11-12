@@ -588,7 +588,6 @@ func (s *AuroraSequencer) assignEntries(ctx context.Context, entries []*tessera.
 func (s *AuroraSequencer) consumeEntries(ctx context.Context, limit uint64, f consumeFunc, forceUpdate bool) (bool, error) {
 	tx, err := s.dbPool.BeginTx(ctx, nil)
 	if err != nil {
-		// TODO(phboneff): edit message
 		return false, fmt.Errorf("failed to begin tx: %v", err)
 	}
 	defer func() {
@@ -596,27 +595,24 @@ func (s *AuroraSequencer) consumeEntries(ctx context.Context, limit uint64, f co
 			tx.Rollback()
 		}
 	}()
-	//	_, err = s.dbPool.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
+
 	// Figure out which is the starting index of sequenced entries to start consuming from.
 	row := tx.QueryRowContext(ctx, "SELECT seq FROM IntCoord WHERE id = ? FOR UPDATE", 0)
 	var fromSeq uint64
 	if err := row.Scan(&fromSeq); err == sql.ErrNoRows {
 		return false, nil
 	} else if err != nil {
-		return false, fmt.Errorf("failed to read coord info: %v", err)
+		return false, fmt.Errorf("failed to read IntCoord: %v", err)
 	}
 	klog.V(1).Infof("Consuming from %d", fromSeq)
 
 	// Now read the sequenced starting at the index we got above.
-	// TODO(phboneff) remove the limit?
-	rows, err := tx.QueryContext(ctx, "SELECT seq, v FROM Seq WHERE id = ? AND seq >= ? ORDER BY SEQ LIMIT 10 FOR UPDATE", 0, fromSeq)
+	rows, err := tx.QueryContext(ctx, "SELECT seq, v FROM Seq WHERE id = ? AND seq >= ? ORDER BY seq LIMIT ? FOR UPDATE", 0, fromSeq, limit)
 	if err != nil {
 		return false, fmt.Errorf("failed to read Seq: %v", err)
 	}
-	// TODO(phboneff): what is thi for?
 	defer rows.Close()
 
-	// TODO(phboneff): do we really need any here
 	seqsConsumed := []any{}
 	entries := make([]storage.SequencedEntry, 0, limit)
 	orderCheck := fromSeq
@@ -625,7 +621,7 @@ func (s *AuroraSequencer) consumeEntries(ctx context.Context, limit uint64, f co
 		var vGob []byte
 		var seq uint64
 		if err := rows.Scan(&seq, &vGob); err != nil {
-			return false, fmt.Errorf("failed to scan seq row: %v", err)
+			return false, fmt.Errorf("failed to scan Seq row: %v", err)
 		}
 
 		if orderCheck != seq {
@@ -635,7 +631,7 @@ func (s *AuroraSequencer) consumeEntries(ctx context.Context, limit uint64, f co
 		g := gob.NewDecoder(bytes.NewReader(vGob))
 		b := []storage.SequencedEntry{}
 		if err := g.Decode(&b); err != nil {
-			return false, fmt.Errorf("failed to deserialise v: %v", err)
+			return false, fmt.Errorf("failed to deserialise v from Seq: %v", err)
 		}
 		entries = append(entries, b...)
 		seqsConsumed = append(seqsConsumed, seq)
@@ -653,21 +649,19 @@ func (s *AuroraSequencer) consumeEntries(ctx context.Context, limit uint64, f co
 
 	// consumeFunc was successful, so we can update our coordination row, and delete the row(s) for
 	// the then consumed entries.
-	// TODO(phboneff): should it be maybe a separate transaction? That would introduce other funny things.
-	if _, err := tx.ExecContext(ctx, "UPDATE IntCoord SET Seq=? WHERE ID=?", orderCheck, 0); err != nil {
+	if _, err := tx.ExecContext(ctx, "UPDATE IntCoord SET seq=? WHERE id=?", orderCheck, 0); err != nil {
 		return false, fmt.Errorf("update intcoord: %v", err)
 	}
 
 	if len(seqsConsumed) > 0 {
-		q := "DELETE FROM Seq WHERE ID=? AND seq IN ( " + placeholder(len(seqsConsumed)) + " )"
+		q := "DELETE FROM Seq WHERE id=? AND seq IN ( " + placeholder(len(seqsConsumed)) + " )"
 		if _, err := tx.ExecContext(ctx, q, append([]any{0}, seqsConsumed...)...); err != nil {
-			klog.Infof("Q: %s", q)
 			return false, fmt.Errorf("update intcoord: %v", err)
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return false, fmt.Errorf("failed to commit TX: %v", err)
+		return false, fmt.Errorf("failed to commit tx: %v", err)
 	}
 	tx = nil
 
