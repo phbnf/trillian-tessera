@@ -521,9 +521,7 @@ func (s *AuroraSequencer) assignEntries(ctx context.Context, entries []*tessera.
 		return fmt.Errorf("failed to read integration coordination info: %v", err)
 	}
 
-	// TODO(phboneff): better handle int64
-	var next uint64 // Unfortunately, Spanner doesn't support uint64 so we'll have to cast around a bit.
-	var id uint64
+	var next, id uint64
 
 	tx, err := s.dbPool.BeginTx(ctx, nil)
 	if err != nil {
@@ -565,14 +563,14 @@ func (s *AuroraSequencer) assignEntries(ctx context.Context, entries []*tessera.
 		return fmt.Errorf("failed to serialise batch: %v", err)
 	}
 	data := b.Bytes()
-	num := len(entries)
+	num := uint64(len(entries))
 
 	// Insert our newly sequenced batch of entries into Seq,
 	if _, err := tx.ExecContext(ctx, "INSERT INTO Seq(id, seq, v) VALUES(?, ?, ?)", 0, next, data); err != nil {
 		return fmt.Errorf("insert into seq: %v", err)
 	}
 	// and update the next-available sequence number row in SeqCoord.
-	if _, err := tx.ExecContext(ctx, "UPDATE SeqCoord SET next = ? WHERE ID = ?", next+uint64(num), 0); err != nil {
+	if _, err := tx.ExecContext(ctx, "UPDATE SeqCoord SET next = ? WHERE ID = ?", next+num, 0); err != nil {
 		return fmt.Errorf("update seqcoord: %v", err)
 	}
 
