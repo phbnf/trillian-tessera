@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// gcp is a simple personality allowing to run conformance/compliance/performance tests and showing how to use the Tessera AWS storage implmentation.
+// aws is a simple personality allowing to run conformance/compliance/performance tests and showing how to use the Tessera AWS storage implmentation.
 package main
 
 import (
@@ -61,14 +61,14 @@ func main() {
 	s, a := signerFromFlags()
 
 	// Create our Tessera storage backend:
-	gcpCfg := storageConfigFromFlags()
-	storage, err := aws.New(ctx, gcpCfg,
+	awsCfg := storageConfigFromFlags()
+	storage, err := aws.New(ctx, awsCfg,
 		tessera.WithCheckpointSigner(s, a...),
 		tessera.WithBatching(1024, time.Second),
 		tessera.WithPushback(10*4096),
 	)
 	if err != nil {
-		klog.Exitf("Failed to create new GCP storage: %v", err)
+		klog.Exitf("Failed to create new AWS storage: %v", err)
 	}
 
 	// Expose a HTTP handler for the conformance test writes.
