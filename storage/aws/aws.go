@@ -193,7 +193,8 @@ func (s *Storage) Get(ctx context.Context, path string) ([]byte, error) {
 func (s *Storage) init(ctx context.Context) error {
 	_, err := s.Get(ctx, layout.CheckpointPath)
 	if err != nil {
-		if errors.Is(err, &types.NoSuchKey{}) {
+		var nske *types.NoSuchKey
+		if errors.As(err, &nske) {
 			// No checkpoint exists, do a forced (possibly empty) integration to create one in a safe
 			// way (calling updateCP directly here would not be safe as it's outside the transactional
 			// framework which prevents the tree from rolling backwards or otherwise forking).
@@ -253,7 +254,8 @@ func (s *Storage) getTiles(ctx context.Context, tileIDs []storage.TileID, logSiz
 			objName := layout.TilePath(id.Level, id.Index, logSize)
 			data, err := s.objStore.getObject(ctx, objName)
 			if err != nil {
-				if errors.Is(err, &types.NoSuchKey{}) {
+				var nske *types.NoSuchKey
+				if errors.As(err, &nske) {
 					// Depending on context, this may be ok.
 					// We'll signal to higher levels that it wasn't found by retuning a nil for this tile.
 					return nil
@@ -282,7 +284,8 @@ func (s *Storage) getEntryBundle(ctx context.Context, bundleIndex uint64, logSiz
 	objName := s.entriesPath(bundleIndex, logSize)
 	data, err := s.objStore.getObject(ctx, objName)
 	if err != nil {
-		if errors.Is(err, &types.NoSuchKey{}) {
+		var nske *types.NoSuchKey
+		if errors.As(err, &nske) {
 			// Return the generic NotExist error so that higher levels can differentiate
 			// between this and other errors.
 			return nil, fmt.Errorf("%v: %w", objName, os.ErrNotExist)
