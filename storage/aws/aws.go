@@ -133,7 +133,7 @@ func New(ctx context.Context, cfg Config, opts ...func(*tessera.StorageOptions))
 	}
 	seq, err := newAuroraSequencer(ctx, cfg.AuroraDSN, uint64(opt.PushbackMaxOutstanding))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Spanner sequencer: %v", err)
+		return nil, fmt.Errorf("failed to create aurora sequencer: %v", err)
 	}
 
 	r := &Storage{
@@ -420,14 +420,14 @@ func (s *Storage) updateEntryBundles(ctx context.Context, fromSeq uint64, entrie
 	return seqErr.Wait()
 }
 
-// AuroraSequencer uses AuroraDB to provide
+// auroraSequencer uses AuroraDB to provide
 // a durable and thread/multi-process safe sequencer.
-type AuroraSequencer struct {
+type auroraSequencer struct {
 	dbPool         *sql.DB
 	maxOutstanding uint64
 }
 
-// new SpannerSequencer returns a new spannerSequencer struct which uses the provided
+// newAuroraSequencer returns a new auroraSequencer struct which uses the provided
 // auroraDSN for its AuroraDB connection.
 func newAuroraSequencer(ctx context.Context, auroraDSN string, maxOutstanding uint64) (*AuroraSequencer, error) {
 	dbPool, err := sql.Open("mysql", auroraDSN)
@@ -435,7 +435,7 @@ func newAuroraSequencer(ctx context.Context, auroraDSN string, maxOutstanding ui
 		return nil, fmt.Errorf("failed to connect to AuroraDB: %v", err)
 	}
 
-	r := &AuroraSequencer{
+	r := &auroraSequencer{
 		dbPool:         dbPool,
 		maxOutstanding: maxOutstanding,
 	}
@@ -461,7 +461,7 @@ func newAuroraSequencer(ctx context.Context, auroraDSN string, maxOutstanding ui
 //   - IntCoord
 //     This table coordinates integration of the batches of entries stored in
 //     Seq into the committed tree state.
-func (s *AuroraSequencer) initDB(ctx context.Context) error {
+func (s *auroraSequencer) initDB(ctx context.Context) error {
 	if _, err := s.dbPool.ExecContext(ctx,
 		`CREATE TABLE IF NOT EXISTS SeqCoord(
 			id INT UNSIGNED NOT NULL,
@@ -506,9 +506,9 @@ func (s *AuroraSequencer) initDB(ctx context.Context) error {
 // assignEntries durably assigns each of the passed-in entries an index in the log.
 //
 // Entries are allocated contiguous indices, in the order in which they appear in the entries parameter.
-// This is achieved by storing the passed-in entries in the Seq table in Spanner, keyed by the
+// This is achieved by storing the passed-in entries in the Seq table in AuroraDB, keyed by the
 // index assigned to the first entry in the batch.
-func (s *AuroraSequencer) assignEntries(ctx context.Context, entries []*tessera.Entry) error {
+func (s *auroraSequencer) assignEntries(ctx context.Context, entries []*tessera.Entry) error {
 	// First grab the treeSize in a non-locking read-only fashion (we don't want to block/collide with integration).
 	// We'll use this value to determine whether we need to apply back-pressure.
 	var treeSize uint64
@@ -587,7 +587,7 @@ func (s *AuroraSequencer) assignEntries(ctx context.Context, entries []*tessera.
 // removed from the Seq table.
 //
 // Returns true if some entries were consumed as a weak signal that there may be further entries waiting to be consumed.
-func (s *AuroraSequencer) consumeEntries(ctx context.Context, limit uint64, f consumeFunc, forceUpdate bool) (bool, error) {
+func (s *auroraSequencer) consumeEntries(ctx context.Context, limit uint64, f consumeFunc, forceUpdate bool) (bool, error) {
 	tx, err := s.dbPool.BeginTx(ctx, nil)
 	if err != nil {
 		return false, fmt.Errorf("failed to begin Tx: %v", err)
