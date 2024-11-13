@@ -119,8 +119,7 @@ func New(ctx context.Context, cfg Config, opts ...func(*tessera.StorageOptions))
 		opt.PushbackMaxOutstanding = DefaultPushbackMaxOutstanding
 	}
 
-	// TODO(phbnf): make sure we want to read the config like this.
-	sdkConfig, err := config.LoadDefaultConfig(context.TODO())
+	sdkConfig, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load default AWS configuration: %v", err)
 	}
