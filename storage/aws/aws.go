@@ -82,7 +82,7 @@ type Storage struct {
 
 // objStore describes a type which can store and retrieve objects.
 type objStore interface {
-	getObject(ctx context.Context, obj string) ([]byte, string, error)
+	getObject(ctx context.Context, obj string) ([]byte, error)
 	setObject(ctx context.Context, obj string, data []byte, cond *s3.PutObjectInput, contType string) error
 }
 
@@ -185,7 +185,7 @@ func (s *Storage) Add(ctx context.Context, e *tessera.Entry) tessera.IndexFuture
 //
 // This is indended to be used to proxy read requests through the personality for debug/testing purposes.
 func (s *Storage) Get(ctx context.Context, path string) ([]byte, error) {
-	d, _, err := s.objStore.getObject(ctx, path)
+	d, err := s.objStore.getObject(ctx, path)
 	return d, err
 }
 
@@ -251,7 +251,7 @@ func (s *Storage) getTiles(ctx context.Context, tileIDs []storage.TileID, logSiz
 		id := id
 		errG.Go(func() error {
 			objName := layout.TilePath(id.Level, id.Index, logSize)
-			data, _, err := s.objStore.getObject(ctx, objName)
+			data, err := s.objStore.getObject(ctx, objName)
 			if err != nil {
 				if errors.Is(err, &types.NoSuchKey{}) {
 					// Depending on context, this may be ok.
@@ -280,7 +280,7 @@ func (s *Storage) getTiles(ctx context.Context, tileIDs []storage.TileID, logSiz
 // Returns a wrapped os.ErrNotExist if the bundle does not exist.
 func (s *Storage) getEntryBundle(ctx context.Context, bundleIndex uint64, logSize uint64) ([]byte, error) {
 	objName := s.entriesPath(bundleIndex, logSize)
-	data, _, err := s.objStore.getObject(ctx, objName)
+	data, err := s.objStore.getObject(ctx, objName)
 	if err != nil {
 		if errors.Is(err, &types.NoSuchKey{}) {
 			// Return the generic NotExist error so that higher levels can differentiate
@@ -672,20 +672,20 @@ func newS3Storage(ctx context.Context, c *s3.Client, projectID string, bucket st
 }
 
 // getObject returns the data and versionID of the specified object, or an error.
-func (s *s3Storage) getObject(ctx context.Context, obj string) ([]byte, string, error) {
+func (s *s3Storage) getObject(ctx context.Context, obj string) ([]byte, error) {
 	r, err := s.s3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(obj),
 	})
 	if err != nil {
-		return nil, "", fmt.Errorf("getObject: failed to create reader for object %q in bucket %q: %w", obj, s.bucket, err)
+		return nil, fmt.Errorf("getObject: failed to create reader for object %q in bucket %q: %w", obj, s.bucket, err)
 	}
 
 	d, err := io.ReadAll(r.Body)
 	if err != nil {
-		return nil, "", fmt.Errorf("getObject: failed to read %q: %v", obj, err)
+		return nil, fmt.Errorf("getObject: failed to read %q: %v", obj, err)
 	}
-	return d, *r.VersionId, r.Body.Close()
+	return d, r.Body.Close()
 }
 
 // setObject stores the provided data in the specified object, optionally gated by a condition.
@@ -714,9 +714,9 @@ func (s *s3Storage) setObject(ctx context.Context, objName string, data []byte, 
 		// If so, we can consider this write to be idempotently successful.
 		var apiErr smithy.APIError
 		if errors.As(err, &apiErr) && apiErr.ErrorCode() == "PreconditionFailed" {
-			existing, existingGen, err := s.getObject(ctx, objName)
+			existing, err := s.getObject(ctx, objName)
 			if err != nil {
-				return fmt.Errorf("failed to fetch existing content for %q (@%s): %v", objName, existingGen, err)
+				return fmt.Errorf("failed to fetch existing content for %q: %v", objName, err)
 			}
 			if !bytes.Equal(existing, data) {
 				klog.Errorf("Resource %q non-idempotent write:\n%s", objName, cmp.Diff(existing, data))
