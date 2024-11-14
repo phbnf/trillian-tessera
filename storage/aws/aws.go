@@ -69,9 +69,6 @@ const (
 type Storage struct {
 	s3Client *s3.Client
 
-	projectID string
-	bucket    string
-
 	newCP       tessera.NewCPFunc
 	parseCP     tessera.ParseCPFunc
 	entriesPath tessera.EntriesPathFunc
