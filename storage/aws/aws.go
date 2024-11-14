@@ -526,7 +526,9 @@ func (s *AuroraSequencer) assignEntries(ctx context.Context, entries []*tessera.
 	}
 	defer func() {
 		if tx != nil {
-			tx.Rollback()
+			if err := tx.Rollback(); err != nil {
+				klog.Errorf("failed to rollback tx: %v", err)
+			}
 		}
 	}()
 
@@ -592,7 +594,9 @@ func (s *AuroraSequencer) consumeEntries(ctx context.Context, limit uint64, f co
 	}
 	defer func() {
 		if tx != nil {
-			tx.Rollback()
+			if err := tx.Rollback(); err != nil {
+				klog.Errorf("failed to rollback tx: %v", err)
+			}
 		}
 	}()
 
