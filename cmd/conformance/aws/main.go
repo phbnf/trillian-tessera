@@ -17,6 +17,8 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"flag"
 	"fmt"
@@ -24,6 +26,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/rds/auth"
+	"github.com/go-sql-driver/mysql"
 	tessera "github.com/transparency-dev/trillian-tessera"
 	"github.com/transparency-dev/trillian-tessera/storage/aws"
 	"golang.org/x/mod/sumdb/note"
@@ -36,7 +41,6 @@ var (
 	bucket            = flag.String("bucket", "", "Bucket to use for storing log")
 	listen            = flag.String("listen", ":2024", "Address:port to listen on")
 	dbUser            = flag.String("db_user", "", "AuroraDB user")
-	dbPassword        = flag.String("db_password", "", "AuroraDB user")
 	dbName            = flag.String("db_name", "", "AuroraDB name")
 	dbHost            = flag.String("db_host", "", "AuroraDB host")
 	dbPort            = flag.Int("db_port", 3306, "AuroraDB port")
@@ -60,8 +64,14 @@ func main() {
 
 	s, a := signerFromFlags()
 
+	// Register RDS certs for IAM authentication
+	c := &http.Client{}
+	if err := RegisterRDSMysqlCerts(c); err != nil {
+		klog.Exitf("failed to register RDS certs: %v", err)
+	}
+
 	// Create our Tessera storage backend:
-	awsCfg := storageConfigFromFlags()
+	awsCfg := storageConfigFromFlags(ctx)
 	storage, err := aws.New(ctx, awsCfg,
 		tessera.WithCheckpointSigner(s, a...),
 		tessera.WithBatching(1024, time.Second),
@@ -109,7 +119,7 @@ func main() {
 
 // storageConfigFromFlags returns an aws.Config struct populated with values
 // provided via flags.
-func storageConfigFromFlags() aws.Config {
+func storageConfigFromFlags(ctx context.Context) aws.Config {
 	if *bucket == "" {
 		klog.Exit("--bucket must be set")
 	}
@@ -126,11 +136,22 @@ func storageConfigFromFlags() aws.Config {
 		klog.Exit("--db_port must be set")
 	}
 
-	var dbEndpoint string = fmt.Sprintf("%s:%d", *dbHost, *dbPort)
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		klog.Exitf("aws configuration error: %v", err)
+	}
 
-	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?allowCleartextPasswords=true",
-		*dbUser, *dbPassword, dbEndpoint, *dbName,
+	var dbEndpoint string = fmt.Sprintf("%s:%d", *dbHost, *dbPort)
+	authenticationToken, err := auth.BuildAuthToken(
+		ctx, dbEndpoint, cfg.Region, *dbUser, cfg.Credentials)
+	if err != nil {
+		klog.Exitf("failed to create rds authentication token: %v", err)
+	}
+
+	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?tls=rds&allowCleartextPasswords=true",
+		*dbUser, authenticationToken, dbEndpoint, *dbName,
 	)
+
 	return aws.Config{
 		Bucket:       *bucket,
 		DSN:          dsn,
@@ -155,4 +176,27 @@ func signerFromFlags() (note.Signer, []note.Signer) {
 	}
 
 	return s, a
+}
+
+func RegisterRDSMysqlCerts(c *http.Client) error {
+	resp, err := c.Get("https://s3.amazonaws.com/rds-downloads/rds-combined-ca-bundle.pem")
+	if err != nil {
+		return err
+	}
+
+	pem, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	rootCertPool := x509.NewCertPool()
+	if ok := rootCertPool.AppendCertsFromPEM(pem); !ok {
+		return err
+	}
+
+	err = mysql.RegisterTLSConfig("rds", &tls.Config{RootCAs: rootCertPool, InsecureSkipVerify: true})
+	if err != nil {
+		return err
+	}
+	return nil
 }
