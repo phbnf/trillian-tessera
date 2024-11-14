@@ -139,7 +139,6 @@ func New(ctx context.Context, cfg Config, opts ...func(*options.StorageOptions))
 		},
 		sequencer:   seq,
 		newCP:       opt.NewCP,
-		parseCP:     opt.ParseCP,
 		entriesPath: opt.EntriesPath,
 	}
 	r.queue = storage.NewQueue(ctx, opt.BatchMaxAge, opt.BatchMaxSize, r.sequencer.assignEntries)
@@ -204,10 +203,6 @@ func (s *Storage) init(ctx context.Context) error {
 		}
 		return fmt.Errorf("failed to read checkpoint: %v", err)
 	}
-	// TODO(phboneff): add this back once the SCTFE has a verifier
-	//if _, err = s.parseCP(cpRaw); err != nil {
-	//	return fmt.Errorf("Found invalid existing checpoint file: %v\ncheckpoint contents:\n%v", err, string(cpRaw))
-	//}
 
 	return nil
 }
