@@ -127,7 +127,11 @@ func New(ctx context.Context, cfg Config, opts ...func(*options.StorageOptions))
 	}
 	c := s3.NewFromConfig(sdkConfig)
 
+<<<<<<< HEAD
 	seq, err := newMysqlSequencer(ctx, cfg.DSN, uint64(opt.PushbackMaxOutstanding), cfg.MaxOpenConns, cfg.MaxIdleConns)
+=======
+	seq, err := newMysqlSequencer(ctx, cfg.AuroraDSN, uint64(opt.PushbackMaxOutstanding), cfg.MaxOpenConns, cfg.MaxIdleConns)
+>>>>>>> b3b3e50 (auroradb: s/aurora/mysql)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MySQL sequencer: %v", err)
 	}
@@ -435,11 +439,15 @@ type mysqlSequencer struct {
 func newMysqlSequencer(ctx context.Context, dsn string, maxOutstanding uint64, maxOpenConns, maxIdleConns int) (*mysqlSequencer, error) {
 	dbPool, err := sql.Open("mysql", dsn)
 	if err != nil {
+<<<<<<< HEAD
 		return nil, fmt.Errorf("failed to connect to MySQL db(%q)): %v", dsn, err)
 	}
 
 	if err := dbPool.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping MySQL db(%q): %v", dsn, err)
+=======
+		return nil, fmt.Errorf("failed to connect to MySQL: %v", err)
+>>>>>>> b3b3e50 (auroradb: s/aurora/mysql)
 	}
 	if maxOpenConns > 0 {
 		dbPool.SetMaxOpenConns(maxOpenConns)
