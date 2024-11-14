@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"time"
 
 	tessera "github.com/transparency-dev/trillian-tessera"
@@ -36,7 +35,6 @@ import (
 var (
 	bucket     = flag.String("bucket", "", "Bucket to use for storing log")
 	listen     = flag.String("listen", ":2024", "Address:port to listen on")
-	project    = flag.String("project", os.Getenv("AWS_CLOUD_PROJECT"), "AWS Project, take from env if unset")
 	dbUser     = flag.String("db_user", "", "AuroraDB user")
 	dbPassword = flag.String("db_password", "", "AuroraDB user")
 	dbName     = flag.String("db_name", "", "AuroraDB name")
@@ -110,9 +108,6 @@ func main() {
 // storageConfigFromFlags returns an aws.Config struct populated with values
 // provided via flags.
 func storageConfigFromFlags() aws.Config {
-	if *project == "" {
-		klog.Exit("--project flag or GOOGLE_CLOUD_PROJECT env must be set.")
-	}
 	if *bucket == "" {
 		klog.Exit("--bucket must be set")
 	}
@@ -135,7 +130,6 @@ func storageConfigFromFlags() aws.Config {
 		*dbUser, *dbPassword, dbEndpoint, *dbName,
 	)
 	return aws.Config{
-		ProjectID:    *project,
 		Bucket:       *bucket,
 		AuroraDSN:    dsn,
 		MaxOpenConns: *dbMaxConns,

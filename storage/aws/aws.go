@@ -106,8 +106,6 @@ type consumeFunc func(ctx context.Context, from uint64, entries []storage.Sequen
 
 // Config holds AWS project and resource configuration for a storage instance.
 type Config struct {
-	// ProjectID is the AWS project which hosts the storage bucket and Spanner database for the log.
-	ProjectID string
 	// Bucket is the name of the S3 bucket to use for storing log state.
 	Bucket string
 	// AuroraDSN is the DSN of the AuroraDB instance to use.
@@ -131,21 +129,16 @@ func New(ctx context.Context, cfg Config, opts ...func(*tessera.StorageOptions))
 	}
 	c := s3.NewFromConfig(sdkConfig)
 
-	s3Storage, err := newS3Storage(ctx, c, cfg.ProjectID, cfg.Bucket)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create S3 storage: %v", err)
-	}
-
-	seq, err := newAuroraSequencer(ctx, cfg.DSN, uint64(opt.PushbackMaxOutstanding), cfg.MaxOpenConns, cfg.MaxIdleConns)
+	seq, err := newAuroraSequencer(ctx, cfg.AuroraDSN, uint64(opt.PushbackMaxOutstanding), cfg.MaxOpenConns, cfg.MaxIdleConns)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create aurora sequencer: %v", err)
 	}
 
 	r := &Storage{
-		s3Client:    c,
-		projectID:   cfg.ProjectID,
-		bucket:      cfg.Bucket,
-		objStore:    s3Storage,
+		objStore: &s3Storage{
+			s3Client: c,
+			bucket:   cfg.Bucket,
+		},
 		sequencer:   seq,
 		newCP:       opt.NewCP,
 		parseCP:     opt.ParseCP,
@@ -695,18 +688,6 @@ func placeholder(n int) string {
 type s3Storage struct {
 	bucket   string
 	s3Client *s3.Client
-}
-
-// newS3Storage creates a new s3Storage.
-//
-// The specified bucket must exist or an error will be returned.
-func newS3Storage(ctx context.Context, c *s3.Client, projectID string, bucket string) (*s3Storage, error) {
-	r := &s3Storage{
-		s3Client: c,
-		bucket:   bucket,
-	}
-
-	return r, nil
 }
 
 // getObject returns the data and versionID of the specified object, or an error.
