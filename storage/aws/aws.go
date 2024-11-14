@@ -522,12 +522,12 @@ func (s *AuroraSequencer) assignEntries(ctx context.Context, entries []*tessera.
 	// Now move on with sequencing in a single transaction
 	tx, err := s.dbPool.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("failed to begin tx: %v", err)
+		return fmt.Errorf("failed to begin Tx: %v", err)
 	}
 	defer func() {
 		if tx != nil {
 			if err := tx.Rollback(); err != nil {
-				klog.Errorf("failed to rollback tx: %v", err)
+				klog.Errorf("failed to rollback Tx: %v", err)
 			}
 		}
 	}()
@@ -574,7 +574,7 @@ func (s *AuroraSequencer) assignEntries(ctx context.Context, entries []*tessera.
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit tx: %v", err)
+		return fmt.Errorf("failed to commit Tx: %v", err)
 	}
 	tx = nil
 
@@ -590,12 +590,12 @@ func (s *AuroraSequencer) assignEntries(ctx context.Context, entries []*tessera.
 func (s *AuroraSequencer) consumeEntries(ctx context.Context, limit uint64, f consumeFunc, forceUpdate bool) (bool, error) {
 	tx, err := s.dbPool.BeginTx(ctx, nil)
 	if err != nil {
-		return false, fmt.Errorf("failed to begin tx: %v", err)
+		return false, fmt.Errorf("failed to begin Tx: %v", err)
 	}
 	defer func() {
 		if tx != nil {
 			if err := tx.Rollback(); err != nil {
-				klog.Errorf("failed to rollback tx: %v", err)
+				klog.Errorf("failed to rollback Tx: %v", err)
 			}
 		}
 	}()
@@ -665,7 +665,7 @@ func (s *AuroraSequencer) consumeEntries(ctx context.Context, limit uint64, f co
 	}
 
 	if err := tx.Commit(); err != nil {
-		return false, fmt.Errorf("failed to commit tx: %v", err)
+		return false, fmt.Errorf("failed to commit Tx: %v", err)
 	}
 	tx = nil
 
