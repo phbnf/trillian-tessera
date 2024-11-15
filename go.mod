@@ -8,6 +8,7 @@ require (
 	github.com/RobinUS2/golang-moving-average v1.0.0
 	github.com/aws/aws-sdk-go-v2 v1.32.4
 	github.com/aws/aws-sdk-go-v2/config v1.28.4
+	github.com/aws/aws-sdk-go-v2/feature/rds/auth v1.4.23
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.67.0
 	github.com/aws/smithy-go v1.22.0
 	github.com/gdamore/tcell/v2 v2.7.4
