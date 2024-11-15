@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// gcp is a simple personality allowing to run conformance/compliance/performance tests and showing how to use the Tessera GCP storage implmentation.
+// gcp is a simple personality allowing to run conformance/compliance/performance tests and showing how to use the Tessera AWS storage implmentation.
 package main
 
 import (
@@ -26,7 +26,7 @@ import (
 	"time"
 
 	tessera "github.com/transparency-dev/trillian-tessera"
-	"github.com/transparency-dev/trillian-tessera/storage/gcp"
+	"github.com/transparency-dev/trillian-tessera/storage/aws"
 	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -34,13 +34,19 @@ import (
 )
 
 var (
-	bucket   = flag.String("bucket", "", "Bucket to use for storing log")
-	listen   = flag.String("listen", ":2024", "Address:port to listen on")
-	project  = flag.String("project", os.Getenv("GOOGLE_CLOUD_PROJECT"), "GCP Project, take from env if unset")
-	spanner  = flag.String("spanner", "", "Spanner resource URI ('projects/.../...')")
-	signer   = flag.String("signer", "", "Note signer to use to sign checkpoints")
-	verifier = flag.String("verifier", "", "Note verifier corresponding to --signer")
-	origin   = flag.String("origin", "", "Log origin string")
+	bucket     = flag.String("bucket", "", "Bucket to use for storing log")
+	listen     = flag.String("listen", ":2024", "Address:port to listen on")
+	project    = flag.String("project", os.Getenv("AWS_CLOUD_PROJECT"), "AWS Project, take from env if unset")
+	dbUser     = flag.String("db_user", "", "AuroraDB user")
+	dbPassword = flag.String("db_password", "", "AuroraDB user")
+	dbName     = flag.String("db_name", "", "AuroraDB name")
+	dbHost     = flag.String("db_host", "", "AuroraDB host")
+	dbPort     = flag.Int("db_port", 3306, "AuroraDB port")
+	dbMaxConns = flag.Int("db_max_conns", 0, "Maximum connections to the database, defaults to 0, i.e unlimited")
+	dbMaxIdle  = flag.Int("db_max_idle_conns", 2, "Maximum idle database connections in the connection pool, defaults to 2")
+	signer     = flag.String("signer", "", "Note signer to use to sign checkpoints")
+	verifier   = flag.String("verifier", "", "Note verifier corresponding to --signer")
+	origin     = flag.String("origin", "", "Log origin string")
 )
 
 func main() {
@@ -56,7 +62,7 @@ func main() {
 
 	// Create our Tessera storage backend:
 	gcpCfg := storageConfigFromFlags()
-	storage, err := gcp.New(ctx, gcpCfg,
+	storage, err := aws.New(ctx, gcpCfg,
 		tessera.WithCheckpointSignerVerifier(s, v),
 		tessera.WithBatching(1024, time.Second),
 		tessera.WithPushback(10*4096),
@@ -101,22 +107,39 @@ func main() {
 	}
 }
 
-// storageConfigFromFlags returns a gcp.Config struct populated with values
+// storageConfigFromFlags returns an aws.Config struct populated with values
 // provided via flags.
-func storageConfigFromFlags() gcp.Config {
+func storageConfigFromFlags() aws.Config {
 	if *project == "" {
 		klog.Exit("--project flag or GOOGLE_CLOUD_PROJECT env must be set.")
 	}
 	if *bucket == "" {
 		klog.Exit("--bucket must be set")
 	}
-	if *spanner == "" {
-		klog.Exit("--spanner must be set")
+	if *dbName == "" {
+		klog.Exit("--db_name must be set")
 	}
-	return gcp.Config{
-		ProjectID: *project,
-		Bucket:    *bucket,
-		Spanner:   *spanner,
+	if *dbUser == "" {
+		klog.Exit("--db_user must be set")
+	}
+	if *dbHost == "" {
+		klog.Exit("--db_host must be set")
+	}
+	if *dbPort == 0 {
+		klog.Exit("--db_port must be set")
+	}
+
+	var dbEndpoint string = fmt.Sprintf("%s:%d", *dbHost, *dbPort)
+
+	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?allowCleartextPasswords=true",
+		*dbUser, *dbPassword, dbEndpoint, *dbName,
+	)
+	return aws.Config{
+		ProjectID:    *project,
+		Bucket:       *bucket,
+		AuroraDSN:    dsn,
+		MaxOpenConns: *dbMaxConns,
+		MaxIdleConns: *dbMaxIdle,
 	}
 }
 
