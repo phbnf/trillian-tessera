@@ -112,6 +112,10 @@ type Config struct {
 	Bucket string
 	// AuroraDSN is the DSN of the AuroraDB instance to use.
 	AuroraDSN string
+	// Maximum connections to the MysSQL database
+	MaxOpenConns int
+	// Maximum idle database connections in the connection pool
+	MaxIdleConns int
 }
 
 // New creates a new instance of the AWS based Storage.
@@ -131,7 +135,8 @@ func New(ctx context.Context, cfg Config, opts ...func(*tessera.StorageOptions))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create S3 storage: %v", err)
 	}
-	seq, err := newAuroraSequencer(ctx, cfg.AuroraDSN, uint64(opt.PushbackMaxOutstanding))
+
+	seq, err := newAuroraSequencer(ctx, cfg.DSN, uint64(opt.PushbackMaxOutstanding), cfg.MaxOpenConns, cfg.MaxIdleConns)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create aurora sequencer: %v", err)
 	}
@@ -429,10 +434,16 @@ type auroraSequencer struct {
 
 // newAuroraSequencer returns a new auroraSequencer struct which uses the provided
 // auroraDSN for its AuroraDB connection.
-func newAuroraSequencer(ctx context.Context, auroraDSN string, maxOutstanding uint64) (*AuroraSequencer, error) {
+func newAuroraSequencer(ctx context.Context, auroraDSN string, maxOutstanding uint64, maxOpenConns, maxIdleConns int) (*AuroraSequencer, error) {
 	dbPool, err := sql.Open("mysql", auroraDSN)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to AuroraDB: %v", err)
+	}
+	if maxOpenConns > 0 {
+		dbPool.SetMaxOpenConns(maxOpenConns)
+	}
+	if maxIdleConns >= 0 {
+		dbPool.SetMaxIdleConns(maxIdleConns)
 	}
 
 	r := &auroraSequencer{
