@@ -64,7 +64,7 @@ func TestSpannerSequencerAssignEntries(t *testing.T) {
 	close := newSpannerDB(t)
 	defer close()
 
-	seq, err := newAuroraSequencer(ctx, "projects/p/instances/i/databases/d", 1000)
+	seq, err := newMysqlSequencer(ctx, "projects/p/instances/i/databases/d", 1000)
 	if err != nil {
 		t.Fatalf("newSpannerSequencer: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestSpannerSequencerPushback(t *testing.T) {
 			close := newSpannerDB(t)
 			defer close()
 
-			seq, err := newAuroraSequencer(ctx, "projects/p/instances/i/databases/d", test.threshold)
+			seq, err := newMysqlSequencer(ctx, "projects/p/instances/i/databases/d", test.threshold)
 			if err != nil {
 				t.Fatalf("newSpannerSequencer: %v", err)
 			}
@@ -147,7 +147,7 @@ func TestSpannerSequencerRoundTrip(t *testing.T) {
 	close := newSpannerDB(t)
 	defer close()
 
-	s, err := newAuroraSequencer(ctx, "projects/p/instances/i/databases/d", 1000)
+	s, err := newMysqlSequencer(ctx, "projects/p/instances/i/databases/d", 1000)
 	if err != nil {
 		t.Fatalf("newSpannerSequencer: %v", err)
 	}

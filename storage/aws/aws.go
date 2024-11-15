@@ -17,14 +17,14 @@
 // TODO: decide whether to rename this package.
 //
 // This storage implementation uses S3 for long-term storage and serving of
-// entry bundles and log tiles, and AuroraDB for coordinating updates to AWS
+// entry bundles and log tiles, and MySQL for coordinating updates to AWS
 // when multiple instances of a personality binary are running.
 //
 // A single S3 bucket is used to hold entry bundles and log internal tiles.
 // The object keys for the bucket are selected so as to conform to the
 // expected layout of a tile-based log.
 //
-// An AuroraDB database provides a transactional mechanism to allow multiple
+// A MySQL database provides a transactional mechanism to allow multiple
 // frontends to safely update the contents of the log.
 package aws
 
@@ -106,8 +106,8 @@ type consumeFunc func(ctx context.Context, from uint64, entries []storage.Sequen
 type Config struct {
 	// Bucket is the name of the S3 bucket to use for storing log state.
 	Bucket string
-	// AuroraDSN is the DSN of the AuroraDB instance to use.
-	AuroraDSN string
+	// DSN is the DSN of the MySQL instance to use.
+	DSN string
 	// Maximum connections to the MysSQL database
 	MaxOpenConns int
 	// Maximum idle database connections in the connection pool
@@ -127,9 +127,9 @@ func New(ctx context.Context, cfg Config, opts ...func(*options.StorageOptions))
 	}
 	c := s3.NewFromConfig(sdkConfig)
 
-	seq, err := newAuroraSequencer(ctx, cfg.AuroraDSN, uint64(opt.PushbackMaxOutstanding), cfg.MaxOpenConns, cfg.MaxIdleConns)
+	seq, err := newMysqlSequencer(ctx, cfg.DSN, uint64(opt.PushbackMaxOutstanding), cfg.MaxOpenConns, cfg.MaxIdleConns)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create aurora sequencer: %v", err)
+		return nil, fmt.Errorf("failed to create MySQL sequencer: %v", err)
 	}
 
 	r := &Storage{
@@ -423,19 +423,19 @@ func (s *Storage) updateEntryBundles(ctx context.Context, fromSeq uint64, entrie
 	return seqErr.Wait()
 }
 
-// auroraSequencer uses AuroraDB to provide
+// mysqlSequencer uses MySQL to provide
 // a durable and thread/multi-process safe sequencer.
-type auroraSequencer struct {
+type mysqlSequencer struct {
 	dbPool         *sql.DB
 	maxOutstanding uint64
 }
 
-// newAuroraSequencer returns a new auroraSequencer struct which uses the provided
-// auroraDSN for its AuroraDB connection.
-func newAuroraSequencer(ctx context.Context, auroraDSN string, maxOutstanding uint64, maxOpenConns, maxIdleConns int) (*AuroraSequencer, error) {
-	dbPool, err := sql.Open("mysql", auroraDSN)
+// newMysqlSequencer returns a new mysqlSequencer struct which uses the provided
+// DSN for its MySQL connection.
+func newMysqlSequencer(ctx context.Context, dsn string, maxOutstanding uint64, maxOpenConns, maxIdleConns int) (*mysqlSequencer, error) {
+	dbPool, err := sql.Open("mysql", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to AuroraDB: %v", err)
+		return nil, fmt.Errorf("failed to connect to MySQL: %v", err)
 	}
 	if maxOpenConns > 0 {
 		dbPool.SetMaxOpenConns(maxOpenConns)
@@ -444,7 +444,7 @@ func newAuroraSequencer(ctx context.Context, auroraDSN string, maxOutstanding ui
 		dbPool.SetMaxIdleConns(maxIdleConns)
 	}
 
-	r := &auroraSequencer{
+	r := &mysqlSequencer{
 		dbPool:         dbPool,
 		maxOutstanding: maxOutstanding,
 	}
@@ -470,7 +470,7 @@ func newAuroraSequencer(ctx context.Context, auroraDSN string, maxOutstanding ui
 //   - IntCoord
 //     This table coordinates integration of the batches of entries stored in
 //     Seq into the committed tree state.
-func (s *auroraSequencer) initDB(ctx context.Context) error {
+func (s *mysqlSequencer) initDB(ctx context.Context) error {
 	if _, err := s.dbPool.ExecContext(ctx,
 		`CREATE TABLE IF NOT EXISTS SeqCoord(
 			id INT UNSIGNED NOT NULL,
@@ -515,9 +515,9 @@ func (s *auroraSequencer) initDB(ctx context.Context) error {
 // assignEntries durably assigns each of the passed-in entries an index in the log.
 //
 // Entries are allocated contiguous indices, in the order in which they appear in the entries parameter.
-// This is achieved by storing the passed-in entries in the Seq table in AuroraDB, keyed by the
+// This is achieved by storing the passed-in entries in the Seq table in MySQL, keyed by the
 // index assigned to the first entry in the batch.
-func (s *auroraSequencer) assignEntries(ctx context.Context, entries []*tessera.Entry) error {
+func (s *mysqlSequencer) assignEntries(ctx context.Context, entries []*tessera.Entry) error {
 	// First grab the treeSize in a non-locking read-only fashion (we don't want to block/collide with integration).
 	// We'll use this value to determine whether we need to apply back-pressure.
 	var treeSize uint64
@@ -596,7 +596,7 @@ func (s *auroraSequencer) assignEntries(ctx context.Context, entries []*tessera.
 // removed from the Seq table.
 //
 // Returns true if some entries were consumed as a weak signal that there may be further entries waiting to be consumed.
-func (s *auroraSequencer) consumeEntries(ctx context.Context, limit uint64, f consumeFunc, forceUpdate bool) (bool, error) {
+func (s *mysqlSequencer) consumeEntries(ctx context.Context, limit uint64, f consumeFunc, forceUpdate bool) (bool, error) {
 	tx, err := s.dbPool.BeginTx(ctx, nil)
 	if err != nil {
 		return false, fmt.Errorf("failed to begin Tx: %v", err)

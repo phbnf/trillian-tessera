@@ -133,7 +133,7 @@ func storageConfigFromFlags() aws.Config {
 	)
 	return aws.Config{
 		Bucket:       *bucket,
-		AuroraDSN:    dsn,
+		DSN:          dsn,
 		MaxOpenConns: *dbMaxConns,
 		MaxIdleConns: *dbMaxIdle,
 	}
