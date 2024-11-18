@@ -38,7 +38,7 @@ import (
 )
 
 var (
-	mySQLURI            = flag.String("mysql_uri", "root:password@tcp(localhost:3306)/test_tessera", "Connection string for a MySQL database")
+	mySQLURI            = flag.String("mysql_uri", "root:root@tcp(localhost:3306)/test_tessera", "Connection string for a MySQL database")
 	isMySQLTestOptional = flag.Bool("is_mysql_test_optional", true, "Boolean value to control whether the MySQL test is optional")
 )
 
