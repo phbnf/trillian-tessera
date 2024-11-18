@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package gcp
+package aws
 
 import (
 	"bytes"
@@ -28,11 +28,12 @@ import (
 	"cloud.google.com/go/spanner/spannertest"
 	"cloud.google.com/go/spanner/spansql"
 	gcs "cloud.google.com/go/storage"
+	"github.com/aws/smithy-go"
 	"github.com/google/go-cmp/cmp"
 	tessera "github.com/transparency-dev/trillian-tessera"
 	"github.com/transparency-dev/trillian-tessera/api"
 	"github.com/transparency-dev/trillian-tessera/api/layout"
-	"github.com/transparency-dev/trillian-tessera/storage/internal"
+	storage "github.com/transparency-dev/trillian-tessera/storage/internal"
 )
 
 func newSpannerDB(t *testing.T) func() {
@@ -63,7 +64,7 @@ func TestSpannerSequencerAssignEntries(t *testing.T) {
 	close := newSpannerDB(t)
 	defer close()
 
-	seq, err := newSpannerSequencer(ctx, "projects/p/instances/i/databases/d", 1000)
+	seq, err := newMySQLSequencer(ctx, "projects/p/instances/i/databases/d", 1000, 0, 0)
 	if err != nil {
 		t.Fatalf("newSpannerSequencer: %v", err)
 	}
@@ -116,7 +117,7 @@ func TestSpannerSequencerPushback(t *testing.T) {
 			close := newSpannerDB(t)
 			defer close()
 
-			seq, err := newSpannerSequencer(ctx, "projects/p/instances/i/databases/d", test.threshold)
+			seq, err := newMySQLSequencer(ctx, "projects/p/instances/i/databases/d", test.threshold, 0, 0)
 			if err != nil {
 				t.Fatalf("newSpannerSequencer: %v", err)
 			}
@@ -146,7 +147,7 @@ func TestSpannerSequencerRoundTrip(t *testing.T) {
 	close := newSpannerDB(t)
 	defer close()
 
-	s, err := newSpannerSequencer(ctx, "projects/p/instances/i/databases/d", 1000)
+	s, err := newMySQLSequencer(ctx, "projects/p/instances/i/databases/d", 1000, 0, 0)
 	if err != nil {
 		t.Fatalf("newSpannerSequencer: %v", err)
 	}
@@ -315,30 +316,33 @@ func newMemObjStore() *memObjStore {
 	}
 }
 
-func (m *memObjStore) getObject(_ context.Context, obj string) ([]byte, int64, error) {
+func (m *memObjStore) getObject(_ context.Context, obj string) ([]byte, error) {
 	m.RLock()
 	defer m.RUnlock()
 
 	d, ok := m.mem[obj]
 	if !ok {
-		return nil, -1, fmt.Errorf("obj %q not found: %w", obj, gcs.ErrObjectNotExist)
+		return nil, fmt.Errorf("obj %q not found: %w", obj, gcs.ErrObjectNotExist)
 	}
-	return d, 1, nil
+	return d, nil
 }
 
 // TODO(phboneff): add content type tests
-func (m *memObjStore) setObject(_ context.Context, obj string, data []byte, cond *gcs.Conditions, _ string) error {
+func (m *memObjStore) setObject(_ context.Context, obj string, data []byte, _ string) error {
+	m.Lock()
+	defer m.Unlock()
+	m.mem[obj] = data
+	return nil
+}
+
+// TODO(phboneff): add content type tests
+func (m *memObjStore) setObjectIfNoneMatch(_ context.Context, obj string, data []byte, _ string) error {
 	m.Lock()
 	defer m.Unlock()
 
 	d, ok := m.mem[obj]
-	if cond != nil {
-		if ok && cond.DoesNotExist {
-			if !bytes.Equal(d, data) {
-				return errors.New("precondition failed and data not identical")
-			}
-			return nil
-		}
+	if ok && !bytes.Equal(d, data) {
+		return &smithy.GenericAPIError{Code: "PreconditionFailed"}
 	}
 	m.mem[obj] = data
 	return nil
