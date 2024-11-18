@@ -18,15 +18,14 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"errors"
+	"flag"
 	"fmt"
-	"os"
 	"reflect"
 	"sync"
 	"testing"
 
-	"cloud.google.com/go/spanner/spannertest"
-	"cloud.google.com/go/spanner/spansql"
 	gcs "cloud.google.com/go/storage"
 	"github.com/aws/smithy-go"
 	"github.com/google/go-cmp/cmp"
@@ -34,37 +33,42 @@ import (
 	"github.com/transparency-dev/trillian-tessera/api"
 	"github.com/transparency-dev/trillian-tessera/api/layout"
 	storage "github.com/transparency-dev/trillian-tessera/storage/internal"
+	"k8s.io/klog/v2"
 )
 
-func newSpannerDB(t *testing.T) func() {
+var (
+	mySQLURI = flag.String("mysql_uri", "root:password@tcp(localhost:3306)/test_tessera", "Connection string for a MySQL database")
+	// TODO(phboneff): get back to this
+	//	isMySQLTestOptional = flag.Bool("is_mysql_test_optional", true, "Boolean value to control whether the MySQL test is optional")
+)
+
+const (
+	// Matching public key: "transparency.dev/tessera/example+ae330e15+ASf4/L1zE859VqlfQgGzKy34l91Gl8W6wfwp+vKP62DW"
+	testPrivateKey = "PRIVATE+KEY+transparency.dev/tessera/example+ae330e15+AXEwZQ2L6Ga3NX70ITObzyfEIketMr2o9Kc+ed/rt/QR"
+)
+
+func dropTables(t *testing.T) func() {
 	t.Helper()
-	srv, err := spannertest.NewServer("localhost:0")
-	if err != nil {
-		t.Fatalf("Failed to set up test spanner: %v", err)
-	}
-	os.Setenv("SPANNER_EMULATOR_HOST", srv.Addr)
-	dml, err := spansql.ParseDDL("", `
-			CREATE TABLE SeqCoord (id INT64 NOT NULL, next INT64 NOT NULL,) PRIMARY KEY (id); 
-			CREATE TABLE Seq (id INT64 NOT NULL, seq INT64 NOT NULL, v BYTES(MAX),) PRIMARY KEY (id, seq); 
-			CREATE TABLE IntCoord (id INT64 NOT NULL, seq INT64 NOT NULL,) PRIMARY KEY (id); 
-	`)
-	if err != nil {
-		t.Fatalf("Invalid DDL: %v", err)
-	}
-	if err := srv.UpdateDDL(dml); err != nil {
-		t.Fatalf("Failed to create schema in test spanner: %v", err)
-	}
 
-	return srv.Close
+	db, err := sql.Open("mysql", *mySQLURI+"?multiStatements=true")
+	if err != nil {
+		t.Fatalf("failed to connect to db: %v", *mySQLURI)
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			klog.Errorf("failed to close db: %v", err)
+		}
+	}()
 
+	_, err := db.ExecContext(ctx, "DROP TABLE IF EXISTS `Seq`, `SeqCoord`, `IntCoord`"); err != nil {
+		t.Fatalf("failed to drop all tables: %v", err)
+	}
 }
 
-func TestSpannerSequencerAssignEntries(t *testing.T) {
-	ctx := context.Background()
-	close := newSpannerDB(t)
-	defer close()
+func TestMySQLSequencerAssignEntries(t *testing.T) {
+	dropTables()
 
-	seq, err := newMySQLSequencer(ctx, "projects/p/instances/i/databases/d", 1000, 0, 0)
+	seq, err := newMySQLSequencer(ctx, *mySQLURI, 1000, 0, 0)
 	if err != nil {
 		t.Fatalf("newSpannerSequencer: %v", err)
 	}
