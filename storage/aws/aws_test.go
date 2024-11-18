@@ -33,7 +33,6 @@ import (
 	"github.com/transparency-dev/trillian-tessera/api"
 	"github.com/transparency-dev/trillian-tessera/api/layout"
 	storage "github.com/transparency-dev/trillian-tessera/storage/internal"
-	"k8s.io/klog/v2"
 )
 
 var (
@@ -47,7 +46,7 @@ const (
 	testPrivateKey = "PRIVATE+KEY+transparency.dev/tessera/example+ae330e15+AXEwZQ2L6Ga3NX70ITObzyfEIketMr2o9Kc+ed/rt/QR"
 )
 
-func dropTables(t *testing.T) func() {
+func mustDropTables(t *testing.T, ctx context.Context) {
 	t.Helper()
 
 	db, err := sql.Open("mysql", *mySQLURI+"?multiStatements=true")
@@ -56,21 +55,25 @@ func dropTables(t *testing.T) func() {
 	}
 	defer func() {
 		if err := db.Close(); err != nil {
-			klog.Errorf("failed to close db: %v", err)
+			t.Fatalf("failed to close db: %v", err)
 		}
 	}()
 
-	_, err := db.ExecContext(ctx, "DROP TABLE IF EXISTS `Seq`, `SeqCoord`, `IntCoord`"); err != nil {
+	if _, err := db.ExecContext(ctx, "DROP TABLE IF EXISTS `Seq`, `SeqCoord`, `IntCoord`"); err != nil {
 		t.Fatalf("failed to drop all tables: %v", err)
 	}
 }
 
 func TestMySQLSequencerAssignEntries(t *testing.T) {
-	dropTables()
+	ctx := context.Background()
+	// Clean tables in case a previous test failed to do so.
+	mustDropTables(t, ctx)
+	// Clean up after yourself.
+	defer mustDropTables(t, ctx)
 
 	seq, err := newMySQLSequencer(ctx, *mySQLURI, 1000, 0, 0)
 	if err != nil {
-		t.Fatalf("newSpannerSequencer: %v", err)
+		t.Fatalf("newMySQLSequencer: %v", err)
 	}
 
 	want := uint64(0)
@@ -91,8 +94,12 @@ func TestMySQLSequencerAssignEntries(t *testing.T) {
 	}
 }
 
-func TestSpannerSequencerPushback(t *testing.T) {
+func TestMySQLSequencerPushback(t *testing.T) {
 	ctx := context.Background()
+	// Clean tables in case a previous test failed to do so.
+	mustDropTables(t, ctx)
+	// Clean up after yourself.
+	defer mustDropTables(t, ctx)
 
 	for _, test := range []struct {
 		name           string
@@ -118,12 +125,11 @@ func TestSpannerSequencerPushback(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			close := newSpannerDB(t)
-			defer close()
+			mustDropTables(t, ctx)
 
-			seq, err := newMySQLSequencer(ctx, "projects/p/instances/i/databases/d", test.threshold, 0, 0)
+			seq, err := newMySQLSequencer(ctx, *mySQLURI, test.threshold, 0, 0)
 			if err != nil {
-				t.Fatalf("newSpannerSequencer: %v", err)
+				t.Fatalf("newMySQLSequencer: %v", err)
 			}
 			// Set up the test scenario with the configured number of initial outstanding entries
 			entries := []*tessera.Entry{}
@@ -146,14 +152,16 @@ func TestSpannerSequencerPushback(t *testing.T) {
 	}
 }
 
-func TestSpannerSequencerRoundTrip(t *testing.T) {
+func TestMySQLSequencerRoundTrip(t *testing.T) {
 	ctx := context.Background()
-	close := newSpannerDB(t)
-	defer close()
+	// Clean tables in case a previous test failed to do so.
+	mustDropTables(t, ctx)
+	// Clean up after yourself.
+	defer mustDropTables(t, ctx)
 
-	s, err := newMySQLSequencer(ctx, "projects/p/instances/i/databases/d", 1000, 0, 0)
+	s, err := newMySQLSequencer(ctx, *mySQLURI, 1000, 0, 0)
 	if err != nil {
-		t.Fatalf("newSpannerSequencer: %v", err)
+		t.Fatalf("newMySQLSequencer: %v", err)
 	}
 
 	seq := 0

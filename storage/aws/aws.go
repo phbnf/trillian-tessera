@@ -456,7 +456,6 @@ func newMySQLSequencer(ctx context.Context, dsn string, maxOutstanding uint64, m
 	}
 
 	if err := r.initDB(ctx); err != nil {
-		return nil, fmt.Errorf("failed to initDB: %v", err)
 	}
 	return r, nil
 }
