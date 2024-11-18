@@ -22,6 +22,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
 	"reflect"
 	"sync"
 	"testing"
@@ -33,18 +34,56 @@ import (
 	"github.com/transparency-dev/trillian-tessera/api"
 	"github.com/transparency-dev/trillian-tessera/api/layout"
 	storage "github.com/transparency-dev/trillian-tessera/storage/internal"
+	"k8s.io/klog"
 )
 
 var (
-	mySQLURI = flag.String("mysql_uri", "root:password@tcp(localhost:3306)/test_tessera", "Connection string for a MySQL database")
-	// TODO(phboneff): get back to this
-	//	isMySQLTestOptional = flag.Bool("is_mysql_test_optional", true, "Boolean value to control whether the MySQL test is optional")
+	mySQLURI            = flag.String("mysql_uri", "root:password@tcp(localhost:3306)/test_tessera", "Connection string for a MySQL database")
+	isMySQLTestOptional = flag.Bool("is_mysql_test_optional", true, "Boolean value to control whether the MySQL test is optional")
 )
 
 const (
 	// Matching public key: "transparency.dev/tessera/example+ae330e15+ASf4/L1zE859VqlfQgGzKy34l91Gl8W6wfwp+vKP62DW"
 	testPrivateKey = "PRIVATE+KEY+transparency.dev/tessera/example+ae330e15+AXEwZQ2L6Ga3NX70ITObzyfEIketMr2o9Kc+ed/rt/QR"
 )
+
+// TestMain parses flags.
+func TestMain(m *testing.M) {
+	klog.InitFlags(nil)
+	flag.Parse()
+	os.Exit(m.Run())
+}
+
+// canSkipMySQLTest checks if the test MySQL db is available and if not, if the test can be skipped.
+//
+// Use this method before every MySQL test.
+//
+// If is_mysql_test_optional is set to true and MySQL database cannot be opened or pinged,
+// the test will fail immediately.  Otherwise, the test will be skipped if the test is optional
+// and the database is not available.
+func canSkipMySQLTest(t *testing.T, ctx context.Context) bool {
+	t.Helper()
+
+	db, err := sql.Open("mysql", *mySQLURI)
+	if err != nil {
+		if *isMySQLTestOptional {
+			return true
+		}
+		t.Fatalf("failed to open MySQL test db: %v", err)
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("failed to close MySQL database: %v", err)
+		}
+	}()
+	if err := db.PingContext(ctx); err != nil {
+		if *isMySQLTestOptional {
+			return true
+		}
+		t.Fatalf("failed to ping MySQL test db: %v", err)
+	}
+	return false
+}
 
 func mustDropTables(t *testing.T, ctx context.Context) {
 	t.Helper()
@@ -66,7 +105,11 @@ func mustDropTables(t *testing.T, ctx context.Context) {
 
 func TestMySQLSequencerAssignEntries(t *testing.T) {
 	ctx := context.Background()
-	// Clean tables in case a previous test failed to do so.
+	if canSkipMySQLTest(t, ctx) {
+		klog.Warningf("MySQL not available, skipping %q", t.Name())
+		return
+	}
+	// Clean tables in case there's something in the database.
 	mustDropTables(t, ctx)
 	// Clean up after yourself.
 	defer mustDropTables(t, ctx)
@@ -96,7 +139,11 @@ func TestMySQLSequencerAssignEntries(t *testing.T) {
 
 func TestMySQLSequencerPushback(t *testing.T) {
 	ctx := context.Background()
-	// Clean tables in case a previous test failed to do so.
+	if canSkipMySQLTest(t, ctx) {
+		klog.Warningf("MySQL not available, skipping %q", t.Name())
+		return
+	}
+	// Clean tables in case there's something in the database.
 	mustDropTables(t, ctx)
 	// Clean up after yourself.
 	defer mustDropTables(t, ctx)
@@ -154,7 +201,11 @@ func TestMySQLSequencerPushback(t *testing.T) {
 
 func TestMySQLSequencerRoundTrip(t *testing.T) {
 	ctx := context.Background()
-	// Clean tables in case a previous test failed to do so.
+	if canSkipMySQLTest(t, ctx) {
+		klog.Warningf("MySQL not available, skipping %q", t.Name())
+		return
+	}
+	// Clean tables in case there's something in the database.
 	mustDropTables(t, ctx)
 	// Clean up after yourself.
 	defer mustDropTables(t, ctx)
