@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// This the tests for a MySQL+S3 AWS Tessera implementation.
+// It requires a MySQL database to successfully run the MySQL tests, otherwise they are skipped.
+//
+// Sample command to start a local MySQL database using Docker:
+// $ docker run --name test-mysql -p 3306:3306 -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=test_tessera -d mysql
 package aws
 
 import (
