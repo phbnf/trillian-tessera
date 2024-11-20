@@ -16,7 +16,7 @@ provider "aws" {
 # Resources
 
 ## S3 Bucket
-resource "aws_s3_bucket" "example" {
+resource "aws_s3_bucket" "log_bucket" {
   bucket = "${var.bucket_prefix}-${var.base_name}-bucket"
   force_destroy = var.ephemeral
 }
