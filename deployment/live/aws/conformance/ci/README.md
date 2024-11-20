@@ -6,9 +6,17 @@ Work in progress
 
 You'll need to have configured the right IAM permissions to create S3 buckets
 and RDS databases, and configured a local AWS profile that can make use of
-these permissions.
+these permissions. For instance, 
 
-## Manual deployment 
+TODO(phboneff): establish what's the minimum set of permissions we need, and list
+them here.
+
+## Manual deployment
+
+Configure an AWS profile using your prefered method, (e.g
+[sso](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html)
+or[credential
+files](https://docs.aws.amazon.com/cli/v1/userguide/cli-configure-files.html))
 
 Set the required environment variables:
 ```bash
