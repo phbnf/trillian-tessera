@@ -8,7 +8,7 @@ locals {
   region     = get_env("AWS_REGION", "us-east-1")
   profile    = get_env("AWS_PROFILE", "default")
   base_name  = get_env("TESSERA_BASE_NAME", "${local.env}-conformance")
-  s3_prefix  = get_env("TESSERA_BUCKET_PREFIX", "tdev")
+  prefix     = get_env("TESSERA_PREFIX_NAME", "tdev")
 }
 
 remote_state {

@@ -1,10 +1,10 @@
-variable "bucket_prefix" {
-  description = "S3 bucket name prefix"
+variable "name_prefix" {
+  description = "Common prefix to use when naming resources, ensures unicity of the s3 bucket name."
   type        = string
 }
 
-variable "base_name" {
-  description = "Base name to use when naming resources"
+variable "name_common" {
+  description = "Common name to use when naming resources"
   type        = string
 }
 

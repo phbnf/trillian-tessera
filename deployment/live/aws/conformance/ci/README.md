@@ -24,11 +24,15 @@ export AWS_PROFILE={VALUE}
 ```
 
 Optionally, customize the AWS region (defaults to "us-east-1"),
-and common resource names (defaults to "conformance"):
+base name, and prefix for resources (defaults to "conformance" and "tdev"):
 ```bash
 export AWS_REGION={VALUE}
 export TESSERA_BASE_NAME={VALUE}
+export TESSERA_PREFIX_NAME={VALUE}
 ```
+
+Resources will be named using a `${TESSERA_PREFIX_NAME}-${TESSERA_BASE_NAME}`
+convention.
 
 Terraforming the project can be done by:
  1. `cd` to the relevant directory for the environment to deploy/change (e.g. `ci`)

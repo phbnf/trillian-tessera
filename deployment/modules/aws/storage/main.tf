@@ -10,6 +10,10 @@ terraform {
 
 data "aws_caller_identity" "current" {}
 
+locals {
+  name = "${var.name_prefix}-${var.name_common}"
+}
+
 # Configure the AWS Provider
 provider "aws" {
   region = var.region
@@ -19,13 +23,13 @@ provider "aws" {
 
 ## S3 Bucket
 resource "aws_s3_bucket" "log_bucket" {
-  bucket = "${data.aws_caller_identity.current.account_id}-${var.base_name}-bucket"
+  bucket = "${local.name}-bucket"
   force_destroy = var.ephemeral
 }
 
 ## Aurora MySQL RDS database
 resource "aws_rds_cluster" "log_rds" {
-  cluster_identifier      = var.base_name
+  cluster_identifier      = "${local.name}-cluster"
   engine                  = "aurora-mysql"
   # TODO(phboneff): make sure that we want to pin this
   engine_version          = "8.0.mysql_aurora.3.05.2"
@@ -40,7 +44,7 @@ resource "aws_rds_cluster" "log_rds" {
 
 resource "aws_rds_cluster_instance" "cluster_instances" {
   count              = 1
-  identifier         = "${var.base_name}-writer-${count.index}"
+  identifier         = "${local.name}-writer-${count.index}"
   cluster_identifier = aws_rds_cluster.log_rds.id
   instance_class     = "db.r5.large"
   engine             = aws_rds_cluster.log_rds.engine
