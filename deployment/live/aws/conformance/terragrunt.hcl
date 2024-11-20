@@ -18,6 +18,7 @@ remote_state {
     region         = local.region
     bucket         = "${local.account_id}-${local.base_name}-terraform-state"
     prefix         = "${local.env}/terraform.tfstate"
+    encrypt        = false
     
     // TODO(phboneff): Will this have a prefix?
     dynamodb_table = "${local.account_id}-${local.base_name}-terraform-lock"
