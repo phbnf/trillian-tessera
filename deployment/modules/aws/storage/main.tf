@@ -28,6 +28,7 @@ resource "aws_rds_cluster" "log_rds" {
   database_name           = "tessera"
   master_username         = "root"
   master_password         = "password"
+  skip_final_snapshot     = true
 }
 
 resource "aws_rds_cluster_instance" "cluster_instances" {
