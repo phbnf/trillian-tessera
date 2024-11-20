@@ -21,3 +21,11 @@ resource "aws_s3_bucket" "log_bucket" {
   force_destroy = var.ephemeral
 }
 
+resource "aws_rds_cluster" "log_rds" {
+  cluster_identifier      = var.base_name
+  engine                  = "aurora-mysql"
+  availability_zones      = ["us-east-1a", "us-east-1b"]
+  database_name           = "tessera"
+  master_username         = "root"
+  master_password         = "root"
+}
