@@ -6,6 +6,7 @@ locals {
   env        = path_relative_to_include()
   account_id = "${get_aws_account_id()}"
   region     = get_env("AWS_REGION", "us-east-1")
+  profile    = get_env("AWS_PROFILE", "default")
   base_name  = get_env("TESSERA_BASE_NAME", "${local.env}-conformance")
   s3_prefix  = get_env("TESSERA_BUCKET_PREFIX", "tdev")
 }
@@ -15,6 +16,7 @@ remote_state {
 
   config = {
     region         = local.region
+    profile        = local.profile
     bucket         = "${local.account_id}-${local.base_name}-terraform-state"
     key            = "${local.env}/terraform.tfstate"
     dynamodb_table = "${local.account_id}-${local.base_name}-terraform-lock"
