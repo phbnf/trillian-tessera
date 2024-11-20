@@ -34,7 +34,6 @@ resource "aws_rds_cluster" "log_rds" {
   engine                  = "aurora-mysql"
   # TODO(phboneff): make sure that we want to pin this
   engine_version          = "8.0.mysql_aurora.3.05.2"
-  availability_zones      = ["us-east-1a", "us-east-1b"]
   database_name           = "tessera"
   master_username         = "root"
   master_password         = "password"
