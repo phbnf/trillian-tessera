@@ -4,7 +4,7 @@ terraform {
 
 locals {
   env        = path_relative_to_include()
-  account_id = "864981736166"
+  account_id = "${get_aws_account_id()}"
   region     = "us-east-1"
   base_name  = get_env("TESSERA_BASE_NAME", "${local.env}-conformance")
 }
