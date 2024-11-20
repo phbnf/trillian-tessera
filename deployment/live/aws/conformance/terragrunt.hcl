@@ -9,6 +9,7 @@ locals {
   profile     = get_env("AWS_PROFILE", "default")
   base_name   = get_env("TESSERA_BASE_NAME", "${local.env}-conformance")
   prefix_name = get_env("TESSERA_PREFIX_NAME", "tdev")
+  ephemeral   = true
 }
 
 remote_state {
