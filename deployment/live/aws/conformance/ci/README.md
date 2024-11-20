@@ -1,6 +1,6 @@
 # AWS Conformance Configs
 
-Work in progress
+Work in progress.
 
 ## Prequisites
 
@@ -13,9 +13,9 @@ them here.
 
 ## Manual deployment
 
-Configure an AWS profile using your prefered method, (e.g
+Configure an AWS profile on your workstation using your prefered method, (e.g
 [sso](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html)
-or[credential
+or [credential
 files](https://docs.aws.amazon.com/cli/v1/userguide/cli-configure-files.html))
 
 Set the required environment variables:
