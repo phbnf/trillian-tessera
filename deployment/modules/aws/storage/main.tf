@@ -11,7 +11,7 @@ terraform {
 data "aws_caller_identity" "current" {}
 
 locals {
-  name = "${var.name_prefix}-${var.name_common}"
+  name = "${var.prefix_name}-${var.base_name}"
 }
 
 # Configure the AWS Provider

@@ -3,12 +3,12 @@ terraform {
 }
 
 locals {
-  env        = path_relative_to_include()
-  account_id = "${get_aws_account_id()}"
-  region     = get_env("AWS_REGION", "us-east-1")
-  profile    = get_env("AWS_PROFILE", "default")
-  base_name  = get_env("TESSERA_BASE_NAME", "${local.env}-conformance")
-  prefix     = get_env("TESSERA_PREFIX_NAME", "tdev")
+  env         = path_relative_to_include()
+  account_id  = "${get_aws_account_id()}"
+  region      = get_env("AWS_REGION", "us-east-1")
+  profile     = get_env("AWS_PROFILE", "default")
+  base_name   = get_env("TESSERA_BASE_NAME", "${local.env}-conformance")
+  prefix_name = get_env("TESSERA_PREFIX_NAME", "tdev")
 }
 
 remote_state {
