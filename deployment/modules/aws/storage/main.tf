@@ -21,20 +21,25 @@ resource "aws_s3_bucket" "log_bucket" {
   force_destroy = var.ephemeral
 }
 
+## Aurora MySQL RDS database
 resource "aws_rds_cluster" "log_rds" {
   cluster_identifier      = var.base_name
   engine                  = "aurora-mysql"
+  # TODO(phboneff): make sure that we want to pin this
+  engine_version          = "8.0.mysql_aurora.3.05.2"
   availability_zones      = ["us-east-1a", "us-east-1b"]
   database_name           = "tessera"
   master_username         = "root"
   master_password         = "password"
   skip_final_snapshot     = true
   apply_immediately       = true
+  backup_retention_period = 0
 }
 
 resource "aws_rds_cluster_instance" "cluster_instances" {
+  writer             = true
   count              = 1
-  identifier         = "${var.base_name}-instance-${count.index}"
+  identifier         = "${var.base_name}-writer-${count.index}"
   cluster_identifier = aws_rds_cluster.log_rds.id
   instance_class     = "db.r5.large"
   engine             = aws_rds_cluster.log_rds.engine
