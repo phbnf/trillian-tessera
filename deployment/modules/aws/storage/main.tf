@@ -29,6 +29,7 @@ resource "aws_rds_cluster" "log_rds" {
   master_username         = "root"
   master_password         = "password"
   skip_final_snapshot     = true
+  apply_immediately       = true
 }
 
 resource "aws_rds_cluster_instance" "cluster_instances" {
