@@ -29,3 +29,12 @@ resource "aws_rds_cluster" "log_rds" {
   master_username         = "root"
   master_password         = "password"
 }
+
+resource "aws_rds_cluster_instance" "cluster_instances" {
+  count              = 1
+  identifier         = "${var.base_name}-instance-${count.index}"
+  cluster_identifier = aws_rds_cluster.log_rds.id
+  instance_class     = "db.r5.large"
+  engine             = aws_rds_cluster.log_rds.engine
+  engine_version     = aws_rds_cluster.log_rds.engine_version
+}
