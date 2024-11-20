@@ -27,5 +27,5 @@ resource "aws_rds_cluster" "log_rds" {
   availability_zones      = ["us-east-1a", "us-east-1b"]
   database_name           = "tessera"
   master_username         = "root"
-  master_password         = "root"
+  master_password         = "password"
 }
