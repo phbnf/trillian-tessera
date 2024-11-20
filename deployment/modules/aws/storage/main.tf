@@ -8,6 +8,8 @@ terraform {
   }
 }
 
+data "aws_caller_identity" "current" {}
+
 # Configure the AWS Provider
 provider "aws" {
   region = var.region
@@ -17,7 +19,7 @@ provider "aws" {
 
 ## S3 Bucket
 resource "aws_s3_bucket" "log_bucket" {
-  bucket = "${var.bucket_prefix}-${var.base_name}-bucket"
+  bucket = "${data.aws_caller_identity.current.account_id}-${var.base_name}-bucket"
   force_destroy = var.ephemeral
 }
 
@@ -37,7 +39,6 @@ resource "aws_rds_cluster" "log_rds" {
 }
 
 resource "aws_rds_cluster_instance" "cluster_instances" {
-  writer             = true
   count              = 1
   identifier         = "${var.base_name}-writer-${count.index}"
   cluster_identifier = aws_rds_cluster.log_rds.id

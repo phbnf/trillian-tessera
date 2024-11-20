@@ -7,6 +7,7 @@ locals {
   account_id = "${get_aws_account_id()}"
   region     = get_env("AWS_REGION", "us-east-1")
   base_name  = get_env("TESSERA_BASE_NAME", "${local.env}-conformance")
+  s3_prefix  = get_env("TESSERA_BUCKET_PREFIX", "tdev")
 }
 
 remote_state {
