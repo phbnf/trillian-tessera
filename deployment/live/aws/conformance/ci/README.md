@@ -23,8 +23,8 @@ Set the required environment variables:
 export AWS_PROFILE={VALUE}
 ```
 
-Optionally, customize the AWS region (defaults to "us-east-1"),
-base name, and prefix for resources (defaults to "conformance" and "tdev"):
+Optionally, customize the AWS region (defaults to "us-east-1"), prefix, and base
+name for resources (defaults to "trillian-tessera" and "conformance"):
 ```bash
 export AWS_REGION={VALUE}
 export TESSERA_BASE_NAME={VALUE}
