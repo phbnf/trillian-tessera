@@ -29,6 +29,7 @@ resource "aws_s3_bucket" "log_bucket" {
 
 ## Aurora MySQL RDS database
 resource "aws_rds_cluster" "log_rds" {
+  apply_immediately       = true
   cluster_identifier      = "${local.name}-cluster"
   engine                  = "aurora-mysql"
   # TODO(phboneff): make sure that we want to pin this
@@ -38,7 +39,6 @@ resource "aws_rds_cluster" "log_rds" {
   master_username         = "root"
   master_password         = "password"
   skip_final_snapshot     = true
-  apply_immediately       = true
   backup_retention_period = 0
 }
 
