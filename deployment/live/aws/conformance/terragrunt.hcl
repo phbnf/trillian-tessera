@@ -6,7 +6,7 @@ locals {
   env         = path_relative_to_include()
   account_id  = "${get_aws_account_id()}"
   region      = get_env("AWS_REGION", "us-east-1")
-  profile     = get_env("AWS_PROFILE", "default")
+  profile     = get_env("AWS_PROFILE", "")
   base_name   = get_env("TESSERA_BASE_NAME", "${local.env}-conformance")
   prefix_name = get_env("TESSERA_PREFIX_NAME", "trillian-tessera")
   ephemeral   = true
