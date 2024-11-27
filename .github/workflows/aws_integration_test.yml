@@ -46,11 +46,13 @@ jobs:
       - name: Generate Tessera keys
         id: generate-keys
         shell: bash
+        # TODO(phboneff): replace with prober go
         run: |
           go run github.com/transparency-dev/serverless-log/cmd/generate_keys@80334bc9dc573e8f6c5b3694efad6358da50abd4 \
             --key_name=tessera/test/conformance \
             --out_priv=${{ runner.temp }}/key.sec \
             --out_pub=${{ runner.temp }}/key.pub
+          cat #{{ runner.temp }}/key.pub
         #uses: actions/checkout@v4
         #with:
         #  repository: transparency-dev/serverless-log
