@@ -37,7 +37,7 @@ jobs:
           ECR_REPOSITORY: transparency-dev/phbtest-trillian-tessera
           IMAGE_TAG: latest
         run: |
-          docker build -f ./cmd/conformance/aws/Dockerfile .
+          docker build -f ./cmd/conformance/aws/Dockerfile . -t "869935063533.dkr.ecr.us-east-1.amazonaws.com/transparency-dev/phbtest-trillian-tessera:$IMAGE_TAG"
           docker push "869935063533.dkr.ecr.us-east-1.amazonaws.com/transparency-dev/phbtest-trillian-tessera:$IMAGE_TAG"
           echo "IMAGE $IMAGE_TAG is pushed to $ECR_REGISTRY/$ECR_REPOSITORY"
           echo "image_tag=$IMAGE_TAG" 
