@@ -61,7 +61,7 @@ resource "google_cloudbuild_trigger" "docker" {
     ## Build the GCP conformance server docker image.
     ## This will be used by the conformance terragrunt config step further down.
     step {
-      id   = "docker_build_conformance_gcp"
+      id   = "docker_build_conformance_aws"
       name = "gcr.io/cloud-builders/docker"
       args = [
         "build",
