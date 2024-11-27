@@ -33,7 +33,7 @@ resource "google_cloudbuild_trigger" "docker" {
   location        = var.region
 
   github {
-    owner = "phboneff"
+    owner = "phbnf"
     name  = "trillian-tessera"
     push {
       branch = "^gcptrigger$"
