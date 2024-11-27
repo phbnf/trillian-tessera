@@ -184,10 +184,10 @@ resource "google_cloudbuild_trigger" "docker" {
   #    wait_for = ["hammer"]
   #  }
 
-  #  options {
-  #    logging      = "CLOUD_LOGGING_ONLY"
-  #    machine_type = "E2_HIGHCPU_8"
-  #  }
+    options {
+      logging      = "CLOUD_LOGGING_ONLY"
+      machine_type = "E2_HIGHCPU_8"
+    }
   }
 }
 
