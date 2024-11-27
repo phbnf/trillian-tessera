@@ -65,6 +65,6 @@ jobs:
         id: terraform-apply
         run: |
           cd  deployment/live/aws/conformance/ci/
-          terraform init
-          terraform apply
+          terragrunt init
+          terragrunt apply
 
