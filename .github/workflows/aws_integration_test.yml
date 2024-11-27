@@ -42,3 +42,14 @@ jobs:
           echo "IMAGE $IMAGE_TAG is pushed to $ECR_REGISTRY/$ECR_REPOSITORY"
           echo "image_tag=$IMAGE_TAG" 
           echo "full_image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+      - name: Generate Tessera keys
+        id: generate-keys
+        uses: actions/setup-go@v5
+        with:
+          go-version: '^1.13.1'
+        run: |
+          go run github.com/transparency-dev/serverless-log/cmd/generate_keys@80334bc9dc573e8f6c5b3694efad6358da50abd4 \
+            --key_name=tessera/test/conformance \
+            --out_priv=${{ runner.temp }}/key.sec \
+            --out_pub=${{ runner.temp }}/key.pub
