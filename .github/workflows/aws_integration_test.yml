@@ -61,3 +61,10 @@ jobs:
         #with:
         #  go-version: '^1.13.1'
         #run: |
+      - name: Push Terraform
+        id: terraform-apply
+        run: |
+          cd  deployment/live/aws/conformance/ci/
+          terraform init
+          terraform apply
+
