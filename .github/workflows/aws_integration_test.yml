@@ -44,7 +44,7 @@ jobs:
           IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
           docker build -f ./cmd/conformance/aws/Dockerfile .
-          docker push "869935063533.dkr.ecr.us-east-1.amazonaws.com/transparency-dev/phbtest-trillian-tessera:$IMAGE_TAG"
+          # docker push "869935063533.dkr.ecr.us-east-1.amazonaws.com/transparency-dev/phbtest-trillian-tessera:$IMAGE_TAG"
           echo "IMAGE $IMAGE_TAG is pushed to $ECR_REGISTRY/$ECR_REPOSITORY"
           echo "image_tag=$IMAGE_TAG" 
           echo "full_image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
