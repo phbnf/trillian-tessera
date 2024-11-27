@@ -120,8 +120,11 @@ resource "google_cloudbuild_trigger" "docker" {
         cd deployment/live/aws/conformance/ci
         export TESSERA_SIGNER=$(cat /workspace/key.sec)
         export AWS_REGION=us-east-1
-        export AWS_ACCESS_KEY_ID=${data.google_secret_manager_secret_version.aws_acces.secret_data}
-        export AWS_SECRET_ACCESS_KEY=${data.google_secret_manager_secret_version.aws_secret.secret_data}
+        mkdir -p ~/.aws/
+        touch ~/.aws/credentials
+        echo "[default]" > ~/.aws/credentials
+        echo "aws_secret_access_key = ${data.google_secret_manager_secret_version.aws_acces.secret_data}" >> ~/.aws/credentials
+        echo "aws_access_key_id = ${data.google_secret_manager_secret_version.aws_secret.secret_data} >> ~/.aws/credentials
         terragrunt output --raw conformance_url > /workspace/conformance_url
       EOT
       wait_for = ["terraform_apply_conformance_ci"]
