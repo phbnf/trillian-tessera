@@ -61,10 +61,12 @@ jobs:
         #with:
         #  go-version: '^1.13.1'
         #run: |
-      - name: Push Terraform
-        id: terraform-apply
-        run: |
-          cd  deployment/live/aws/conformance/ci/
-          terragrunt init
-          terragrunt apply
-
+      - name: Terragrunt apply
+        uses: gruntwork-io/terragrunt-action@v2
+        with:
+          # TODO(phboneff): move to env values
+          tf_version: 1.10.0
+          tg_version: 0.67.0
+          tg_dir: deployment/live/aws/conformance/ci/
+          tg_command: 'apply'
+        id: terragrunt-apply
