@@ -63,6 +63,8 @@ jobs:
         #run: |
       - name: Terragrunt apply
         uses: gruntwork-io/terragrunt-action@v2
+        env:
+          TESSERA_PREFIX_NAME: phboneff-dev
         with:
           # TODO(phboneff): move to env values
           tf_version: 1.10.0
