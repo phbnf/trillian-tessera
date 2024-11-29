@@ -163,7 +163,7 @@ resource "aws_ecs_service" "conformance_service" {
   task_definition = aws_ecs_task_definition.conformance.arn
   desired_count   = 3
   network_configuration {
-    subnets = aws_default_vpc.default.subnet_ids
+    subnets = aws_default_vpc.default.private_subnet_ids
     assign_public_ip = false
   }
 }
