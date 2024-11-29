@@ -45,13 +45,13 @@ resource "aws_ecs_task_definition" "conformance" {
   family                   = "conformance"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = 1
+  cpu                      = 1024
   memory                   = 2048
   # TODO(phboneff): change this
   execution_role_arn       = "arn:aws:iam::869935063533:role/ecsTaskExecutionRole"
   container_definitions = jsonencode([
     {
-            "name": "conformance",
+            "name": "${local.name}-conformance",
             "image": "869935063533.dkr.ecr.us-east-1.amazonaws.com/transparency-dev/phbtest-trillian-tessera",
             "cpu": 0,
             "portMappings": [
@@ -101,18 +101,17 @@ resource "aws_ecs_task_definition" "conformance" {
   }
 }
 
-
 resource "aws_ecs_task_definition" "hammer" {
   family                   = "hammer"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = 1
+  cpu                      = 1024
   memory                   = 2048
   # TODO(phboneff): change this
   execution_role_arn       = "arn:aws:iam::869935063533:role/ecsTaskExecutionRole"
   container_definitions = jsonencode([
     {
-            "name": "hammer",
+            "name": "${local.name}-hammer",
             "image": "869935063533.dkr.ecr.us-east-1.amazonaws.com/transparency-dev/phbtest-hammer:latest",
             "cpu": 0,
             "portMappings": [
