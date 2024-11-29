@@ -312,7 +312,7 @@ data "aws_iam_policy_document" "allow_access_from_another_account" {
      variable = "aws:sourceVpce" 
      # TODO(phboneff): replace with real VPC ID
      values = [
-      "vpce-0752bfb9c655b48e7",
+      "vpce-0637f5d659e1323f7",
      ]
     }
   }
