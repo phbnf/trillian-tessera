@@ -1,5 +1,5 @@
 terraform {
-  source = "${get_repo_root()}/deployment/modules/aws//storage"
+  source = "${get_repo_root()}/deployment/modules/aws//conformance"
 }
 
 locals {
