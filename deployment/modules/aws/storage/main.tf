@@ -39,7 +39,7 @@ resource "aws_rds_cluster" "log_rds" {
   # TODO(phboneff): move to either random strings / Secret Manager / IAM
   master_password         = "password"
   skip_final_snapshot     = true
-  backup_retention_period = 0
+  backup_retention_period = 1
 }
 
 resource "aws_rds_cluster_instance" "cluster_instances" {
