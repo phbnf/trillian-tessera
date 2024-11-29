@@ -54,6 +54,7 @@ resource "aws_ecs_task_definition" "conformance" {
   cpu                      = 1024
   memory                   = 2048
   # TODO(phboneff): change this
+  task_role_arn            = "arn:aws:iam::869935063533:role/ecstaskexecutionrole"
   execution_role_arn       = "arn:aws:iam::869935063533:role/ecsTaskExecutionRole"
   container_definitions = jsonencode([
     {
@@ -86,18 +87,17 @@ resource "aws_ecs_task_definition" "conformance" {
                 "-v",
                 "2"
             ],
-            # TODO(phboneff): reenabel this
-            # "logConfiguration": {
-            #     "logDriver": "awslogs",
-            #     "options": {
-            #         "awslogs-group": "/ecs/conformance",
-            #         "mode": "non-blocking",
-            #         "awslogs-create-group": "true",
-            #         "max-buffer-size": "25m",
-            #         "awslogs-region": "us-east-1",
-            #         "awslogs-stream-prefix": "ecs"
-            #     },
-            # },
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/${local.name}-conformance-conformance",
+                    "mode": "non-blocking",
+                    "awslogs-create-group": "true",
+                    "max-buffer-size": "25m",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "ecs"
+                },
+            },
         },
   ])
 
@@ -114,6 +114,7 @@ resource "aws_ecs_task_definition" "hammer" {
   cpu                      = 1024
   memory                   = 2048
   # TODO(phboneff): change this
+  task_role_arn            = "arn:aws:iam::869935063533:role/ecsTaskExecutionRole"
   execution_role_arn       = "arn:aws:iam::869935063533:role/ecsTaskExecutionRole"
   container_definitions = jsonencode([
     {
@@ -142,18 +143,17 @@ resource "aws_ecs_task_definition" "hammer" {
                 "--leaf_min_size=1024",
                 "--leaf_write_goal=50000"
             ],
-            # TODO(phboneff): re-enable
-            #"logConfiguration": {
-            #    "logDriver": "awslogs",
-            #    "options": {
-            #        "awslogs-group": "/ecs/hammer",
-            #        "mode": "non-blocking",
-            #        "awslogs-create-group": "true",
-            #        "max-buffer-size": "25m",
-            #        "awslogs-region": "us-east-1",
-            #        "awslogs-stream-prefix": "ecs"
-            #    },
-            #},
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/${local.name}-conformance-hammer",
+                    "mode": "non-blocking",
+                    "awslogs-create-group": "true",
+                    "max-buffer-size": "25m",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "ecs"
+                },
+            },
         }
   ])
 
@@ -170,6 +170,7 @@ resource "aws_ecs_task_definition" "conformance-all" {
   cpu                      = 1024
   memory                   = 2048
   # TODO(phboneff): change this
+  task_role_arn            = "arn:aws:iam::869935063533:role/ecsTaskExecutionRole"
   execution_role_arn       = "arn:aws:iam::869935063533:role/ecsTaskExecutionRole"
   container_definitions = jsonencode([
     {
@@ -202,18 +203,17 @@ resource "aws_ecs_task_definition" "conformance-all" {
            "-v",
            "2"
        ],
-        # TODO(phboneff): reenabel this
-        # "logConfiguration": {
-        #     "logDriver": "awslogs",
-        #     "options": {
-        #         "awslogs-group": "/ecs/conformance",
-        #         "mode": "non-blocking",
-        #         "awslogs-create-group": "true",
-        #         "max-buffer-size": "25m",
-        #         "awslogs-region": "us-east-1",
-        #         "awslogs-stream-prefix": "ecs"
-        #     },
-        # },
+       "logConfiguration": {
+           "logDriver": "awslogs",
+           "options": {
+               "awslogs-group": "/ecs/${local.name}-conformance-all-conformance",
+               "mode": "non-blocking",
+               "awslogs-create-group": "true",
+               "max-buffer-size": "25m",
+               "awslogs-region": "us-east-1",
+               "awslogs-stream-prefix": "ecs"
+           },
+       },
     },
     {
        "name": "${local.name}-hammer",
@@ -241,18 +241,17 @@ resource "aws_ecs_task_definition" "conformance-all" {
            "--leaf_min_size=1024",
            "--leaf_write_goal=50000"
           ],
-            # TODO(phboneff): re-enable
-            #"logConfiguration": {
-            #    "logDriver": "awslogs",
-            #    "options": {
-            #        "awslogs-group": "/ecs/hammer",
-            #        "mode": "non-blocking",
-            #        "awslogs-create-group": "true",
-            #        "max-buffer-size": "25m",
-            #        "awslogs-region": "us-east-1",
-            #        "awslogs-stream-prefix": "ecs"
-            #    },
-            #},
+          "logConfiguration": {
+              "logDriver": "awslogs",
+              "options": {
+                  "awslogs-group": "/ecs/${local.name}-conformance-all-hammer",
+                  "mode": "non-blocking",
+                  "awslogs-create-group": "true",
+                  "max-buffer-size": "25m",
+                  "awslogs-region": "us-east-1",
+                  "awslogs-stream-prefix": "ecs"
+              },
+          },
     }
   ])
 
