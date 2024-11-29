@@ -158,7 +158,7 @@ resource "aws_ecs_task_definition" "hammer" {
 }
 
 resource "aws_ecs_task_definition" "conformance-all" {
-  family                   = "conformance"
+  family                   = "conformance-all"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = 1024
