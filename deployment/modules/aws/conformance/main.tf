@@ -288,7 +288,7 @@ resource "aws_default_subnet" "subnet" {
 
 
 resource "aws_s3_bucket_policy" "allow_access_from_another_account" {
-  bucket = storage.aws_s3_bucket.log_bucket.id
+  bucket = module.storage.log_bucket.id
   policy = data.aws_iam_policy_document.allow_access_from_another_account.json
 }
 
@@ -305,8 +305,8 @@ data "aws_iam_policy_document" "allow_access_from_another_account" {
     ]
 
     resources = [
-      storage.aws_s3_bucket.log_bucket.arn,
-      "${storage.aws_s3_bucket.log_bucket.arn}/*",
+      module.storage.log_bucket.arn,
+      "${module.storage.log_bucket.arn}/*",
     ]
 
     condition {
