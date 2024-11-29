@@ -41,6 +41,12 @@ resource "aws_ecs_cluster" "conformance-test" {
  # }
 }
 
+resource "aws_ecs_cluster_capacity_providers" "conformance-test" {
+  cluster_name = aws_ecs_cluster.conformance-test.name
+
+  capacity_providers = ["FARGATE"]
+}
+
 resource "aws_ecs_task_definition" "conformance" {
   family                   = "conformance"
   requires_compatibilities = ["FARGATE"]
