@@ -54,7 +54,7 @@ resource "aws_ecs_task_definition" "conformance" {
   cpu                      = 1024
   memory                   = 2048
   # TODO(phboneff): change this
-  task_role_arn            = "arn:aws:iam::869935063533:role/ecstaskexecutionrole"
+  task_role_arn            = "arn:aws:iam::869935063533:role/ecsTaskExecutionRole"
   execution_role_arn       = "arn:aws:iam::869935063533:role/ecsTaskExecutionRole"
   container_definitions = jsonencode([
     {
