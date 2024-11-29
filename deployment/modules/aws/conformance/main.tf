@@ -295,7 +295,7 @@ resource "aws_s3_bucket_policy" "allow_access_from_another_account" {
 data "aws_iam_policy_document" "allow_access_from_another_account" {
   statement {
     principals {
-      type        = "AWS"
+      type        = "*"
       identifiers = ["*"]
     }
 
