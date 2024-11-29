@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+env: 
+  tf_version: '1.10.0'
+  tg_version: '0.67.0'
+  tg_dir: 'deployment/live/aws/conformance/ci/'
+
 jobs:
   aws-integration:
     runs-on: ubuntu-latest
@@ -16,6 +21,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
+          # TODO(phboneff): use a better form of authentication
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
@@ -34,6 +40,7 @@ jobs:
         shell: bash
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          # TODO(phboneff): change this
           ECR_REPOSITORY: transparency-dev/phbtest-trillian-tessera
           IMAGE_TAG: latest
         run: |
@@ -42,6 +49,23 @@ jobs:
           echo "IMAGE $IMAGE_TAG is pushed to $ECR_REGISTRY/$ECR_REPOSITORY"
           echo "image_tag=$IMAGE_TAG" 
           echo "full_image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+      # TODO(phboneff): add a registry for the hammer
+      
+      # TODO(phboneff): AuroraDB take a long time to be brouht up and down
+      #   consider keeping it around between tests / using Aurora Serveless
+
+      - name: Terragrunt destroy pre test
+        id: terragrunt-destroy
+        uses: gruntwork-io/terragrunt-action@v2
+        env:
+          # TODO(phboneff): remove this
+          TESSERA_PREFIX_NAME: phboneff-dev
+        with:
+          tf_version: ${{ env.tf_version }}
+          tg_version: ${{ env.tg_version }}
+          tg_dir: ${{ env.tg_dir }}
+          tg_command: 'destroy'
 
       - name: Generate Tessera keys
         id: generate-keys
@@ -61,14 +85,29 @@ jobs:
         #with:
         #  go-version: '^1.13.1'
         #run: |
+
       - name: Terragrunt apply
+        id: terragrunt-apply
         uses: gruntwork-io/terragrunt-action@v2
         env:
+          # TODO(phboneff): remove this
           TESSERA_PREFIX_NAME: phboneff-dev
         with:
-          # TODO(phboneff): move to env values
-          tf_version: 1.10.0
-          tg_version: 0.67.0
-          tg_dir: deployment/live/aws/conformance/ci/
+          tf_version: ${{ env.tf_version }}
+          tg_version: ${{ env.tg_version }}
+          tg_dir: ${{ env.tg_dir }}
           tg_command: 'apply'
-        id: terragrunt-apply
+
+      # TODO(phboneff): run conformance test on Fargate
+
+      - name: Terragrunt destroy post test
+        id: terragrunt-destroy
+        uses: gruntwork-io/terragrunt-action@v2
+        env:
+          # TODO(phboneff): remove this
+          TESSERA_PREFIX_NAME: phboneff-dev
+        with:
+          tf_version: ${{ env.tf_version }}
+          tg_version: ${{ env.tg_version }}
+          tg_dir: ${{ env.tg_dir }}
+          tg_command: 'destroy'
