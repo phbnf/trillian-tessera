@@ -163,13 +163,20 @@ resource "aws_ecs_service" "conformance_service" {
   task_definition = aws_ecs_task_definition.conformance.arn
   desired_count   = 3
   network_configuration {
-    subnets = aws_default_vpc.default.private_subnet_ids
+    subnets = [aws_default_subnet.subnet.id]
     assign_public_ip = false
   }
 }
 
-resource "aws_default_vpc" "default" {
-  tags = {
-    Name = "Default VPC"
-  }
+#resource "aws_default_vpc" "default" {
+#  tags = {
+#    Name = "Default VPC"
+#  }
+#}
+
+resource "aws_default_subnet" "subnet" {
+ #vpc_id                  = aws_default_vpc.default.id
+ #cidr_block              = cidrsubnet(aws_vpc.main.cidr_block, 8, 1)
+ #map_public_ip_on_launch = true
+ availability_zone       = "${var.region}a"
 }
