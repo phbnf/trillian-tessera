@@ -285,3 +285,37 @@ resource "aws_default_subnet" "subnet" {
  #map_public_ip_on_launch = true
  availability_zone       = "${var.region}a"
 }
+
+
+resource "aws_s3_bucket_policy" "allow_access_from_another_account" {
+  bucket = storage.aws_s3_bucket.log_bucket.id
+  policy = data.aws_iam_policy_document.allow_access_from_another_account.json
+}
+
+data "aws_iam_policy_document" "allow_access_from_another_account" {
+  statement {
+    principals {
+      type        = "AWS"
+      identifiers = ["123456789012"]
+    }
+
+    actions = [
+      "s3:GetObject",
+      "s3:ListBucket",
+    ]
+
+    resources = [
+      storage.aws_s3_bucket.log_bucket.arn,
+      "${storage.aws_s3_bucket.log_bucket.arn}/*",
+    ]
+
+    condition {
+     test = "StringEquals"
+     variable = "aws:sourceVpce" 
+     # TODO(phboneff): replace with real VPC ID
+     values = [
+      "vpce-0752bfb9c655b48e7",
+     ]
+    }
+  }
+}
