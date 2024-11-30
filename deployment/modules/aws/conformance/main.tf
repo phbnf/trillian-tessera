@@ -77,7 +77,7 @@ resource "aws_ecs_task_definition" "conformance" {
                 "--db_name",
                 "tessera",
                 "--db_host",
-                "${module.storage.log_rds_db.address}",
+                "${module.storage.log_rds_db.endpoint}",
                 "--db_port",
                 "${module.storage.log_rds_db.port}",
                 "-v",
