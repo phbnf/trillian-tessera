@@ -32,13 +32,7 @@ module "storage" {
 
 ## ECS cluster
 resource "aws_ecs_cluster" "conformance-test" {
-  name = "${local.name}-conformance-cluster"
-
- #TODO(phboneff): do I want to leave this enabled?
- # setting {
- #   name  = "containerInsights"
- #   value = "enabled"
- # }
+  name = "${local.name}"
 }
 
 resource "aws_ecs_cluster_capacity_providers" "conformance-test" {
@@ -59,7 +53,7 @@ resource "aws_ecs_task_definition" "conformance" {
   container_definitions = jsonencode([
     {
             "name": "${local.name}-conformance",
-            "image": "869935063533.dkr.ecr.us-east-1.amazonaws.com/transparency-dev/phbtest-trillian-tessera",
+            "image": "${var.ecr_registry}/${var.ecr_repository_conformance}",
             "cpu": 0,
             "portMappings": [
                 {
@@ -119,7 +113,7 @@ resource "aws_ecs_task_definition" "hammer" {
   container_definitions = jsonencode([
     {
             "name": "${local.name}-hammer",
-            # TODO(phboneff): change this
+            "image": "${var.ecr_registry}/${var.ecr_repository_conformance}",
             "image": "869935063533.dkr.ecr.us-east-1.amazonaws.com/transparency-dev/phbtest-hammer:latest",
             "cpu": 0,
             "portMappings": [
@@ -180,6 +174,8 @@ resource "aws_service_discovery_service" "conformance-discovery" {
       type = "A"
     }
 
+    // TODO(phboneff): make sure that the hammer uses multiple IPs
+    // otherwise, set a low TTL and use WEIGHTED.
     routing_policy = "MULTIVALUE"
   }
 
@@ -189,7 +185,7 @@ resource "aws_service_discovery_service" "conformance-discovery" {
 }
 
 resource "aws_ecs_service" "conformance_service" {
-  name            = "${local.name}-conformance"
+  name            = "${local.name}"
   cluster         = aws_ecs_cluster.conformance-test.arn
   task_definition = aws_ecs_task_definition.conformance.arn
   desired_count   = 3
