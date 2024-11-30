@@ -158,7 +158,7 @@ resource "aws_ecs_task_definition" "conformance" {
                 "--signer",
                 "PRIVATE+KEY+phboneff-dev-ci-conformance+3f5267c1+AbNthDVVl8SUoHuxMtSxGjHXi5R+CivYtyO7M2TPVSi6",
                 "--bucket",
-                "${module.storage.log_bucket.name}",
+                "${module.storage.log_bucket.id}",
                 "phboneff-dev-ci-conformance-bucket",
                 "--db_user",
                 "root",
