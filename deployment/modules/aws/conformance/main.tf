@@ -12,6 +12,7 @@ data "aws_caller_identity" "current" {}
 
 locals {
   name = "${var.prefix_name}-${var.base_name}"
+  port = 2024
 }
 
 # Configure the AWS Provider
@@ -57,9 +58,9 @@ resource "aws_ecs_task_definition" "conformance" {
             "cpu": 0,
             "portMappings": [
                 {
-                    "name": "conformance-2024-tcp",
-                    "containerPort": 2024,
-                    "hostPort": 2024,
+                    "name": "conformance-${local.port}-tcp",
+                    "containerPort": local.port,
+                    "hostPort": local.port,
                     "protocol": "tcp",
                     "appProtocol": "http"
                 }
@@ -128,7 +129,7 @@ resource "aws_ecs_task_definition" "hammer" {
             "command": [
                 "--log_public_key=phboneff-dev-ci-conformance+3f5267c1+AatjnH2pMn2wRamVV1hywQI/+lHsV8ftCBroiCWyOUWQ",
                 "--log_url=https://${module.storage.log_bucket.bucket_regional_domain_name}",
-                "--write_log_url=http://${aws_service_discovery_service.conformance-discovery.name}.${aws_service_discovery_private_dns_namespace.internal.name}:2024",
+                "--write_log_url=http://${aws_service_discovery_service.conformance-discovery.name}.${aws_service_discovery_private_dns_namespace.internal.name}:${local.port}",
                 "-v=3",
                 "--show_ui=false",
                 "--logtostderr",
