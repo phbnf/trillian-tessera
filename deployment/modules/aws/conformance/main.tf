@@ -204,6 +204,8 @@ resource "aws_ecs_service" "conformance_service" {
   service_registries {
     registry_arn = aws_service_discovery_service.conformance-discovery.arn
   }
+
+  wait_for_steady_state = true
   
   depends_on = [
     aws_service_discovery_private_dns_namespace.internal,
