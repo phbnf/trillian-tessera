@@ -263,8 +263,29 @@ resource "aws_ecs_task_definition" "conformance-all" {
   }
 }
 
-resource "aws_service_discovery_http_namespace" "conformance" {
-  name        = "conformance"
+resource "aws_service_discovery_private_dns_namespace" "internal" {
+  name        = "internal"
+  # TODO(phbonef): repalce with better
+  vpc         = aws_default_subnet.subnet.vpc_id
+}
+
+resource "aws_service_discovery_service" "conformance-discovery" {
+  name = "conformance-discovery"
+
+  dns_config {
+    namespace_id = aws_service_discovery_private_dns_namespace.internal.id
+
+    dns_records {
+      ttl  = 10
+      type = "A"
+    }
+
+    routing_policy = "MULTIVALUE"
+  }
+
+  health_check_custom_config {
+    failure_threshold = 1
+  }
 }
 
 resource "aws_ecs_service" "conformance_service" {
@@ -287,7 +308,7 @@ resource "aws_ecs_service" "conformance_service" {
 
   service_connect_configuration {
    enabled   = true
-   namespace = aws_service_discovery_http_namespace.conformance.arn
+   namespace = aws_service_discovery_private_dns_namespace.internal.arn
    service {
     discovery_name = "conformance"
     port_name = "conformance-2024-tcp" 
