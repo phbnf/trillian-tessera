@@ -77,7 +77,7 @@ resource "aws_ecs_task_definition" "conformance" {
                 "--db_name",
                 "tessera",
                 "--db_host",
-                "phboneff-dev-ci-conformance-writer-0.cbw8guwmo1hn.us-east-1.rds.amazonaws.com",
+                "${module.storage.log_rds.host}",
                 "-v",
                 "2"
             ],
