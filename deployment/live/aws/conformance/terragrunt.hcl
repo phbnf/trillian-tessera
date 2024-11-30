@@ -10,8 +10,8 @@ locals {
   base_name                  = get_env("TESSERA_BASE_NAME", "${local.env}-conformance")
   prefix_name                = get_env("TESSERA_PREFIX_NAME", "trillian-tessera")
   ecr_registry               = get_env("ECR_REGISTRY", "${local.env}.dkr.ecr.${local.region}.amazonaws.com")
-  ecr_repository_conformance = get_env("ECR_REPOSITORY_CONFORMANCE", "trillian-tessera/conformance")
-  ecr_repository_hammer      = get_env("ECR_REPOSITORY_HAMMER", "trillian-tessera/hammer")
+  ecr_repository_conformance = get_env("ECR_REPOSITORY_CONFORMANCE", "trillian-tessera/conformance:latest")
+  ecr_repository_hammer      = get_env("ECR_REPOSITORY_HAMMER", "trillian-tessera/hammer:latest")
   ephemeral                  = true
 }
 

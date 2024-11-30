@@ -141,7 +141,7 @@ resource "aws_ecs_task_definition" "conformance" {
   execution_role_arn       = "arn:aws:iam::869935063533:role/ecsTaskExecutionRole"
   container_definitions    = jsonencode([{
     "name": "${local.name}-conformance",
-    "image": "${var.ecr_registry}/${var.ecr_repository_conformance}:latest",
+    "image": "${var.ecr_registry}/${var.ecr_repository_conformance}",
     "cpu": 0,
     "portMappings": [{
       "name": "conformance-${local.port}-tcp",
@@ -152,21 +152,13 @@ resource "aws_ecs_task_definition" "conformance" {
     }],
     "essential": true,
     "command": [
-      "--signer",
-      "PRIVATE+KEY+phboneff-dev-ci-conformance+3f5267c1+AbNthDVVl8SUoHuxMtSxGjHXi5R+CivYtyO7M2TPVSi6",
-      "--bucket",
-      "${module.storage.log_bucket.id}",
-      "phboneff-dev-ci-conformance-bucket",
-      "--db_user",
-      "root",
-      "--db_password",
-      "password",
-      "--db_name",
-      "tessera",
-      "--db_host",
-      "${module.storage.log_rds_db.endpoint}",
-      "-v",
-      "2"
+      "--signer=PRIVATE+KEY+phboneff-dev-ci-conformance+3f5267c1+AbNthDVVl8SUoHuxMtSxGjHXi5R+CivYtyO7M2TPVSi6",
+      "--bucket=${module.storage.log_bucket.id}",
+      "--db_user=root",
+      "--db_password=password",
+      "--db_name=tessera",
+      "--db_host=${module.storage.log_rds_db.endpoint}",
+      "-v=2"
     ],
     "logConfiguration": {
       "logDriver": "awslogs",
@@ -235,7 +227,7 @@ resource "aws_ecs_task_definition" "hammer" {
   execution_role_arn       = "arn:aws:iam::869935063533:role/ecsTaskExecutionRole"
   container_definitions = jsonencode([{
     "name": "${local.name}-hammer",
-    "image": "${var.ecr_registry}/${var.ecr_repository_hammer}:latest",
+    "image": "${var.ecr_registry}/${var.ecr_repository_hammer}",
     "cpu": 0,
     "portMappings": [{
       "name": "hammer-80-tcp",

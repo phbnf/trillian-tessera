@@ -24,11 +24,11 @@ variable "ecr_registry" {
 }
 
 variable "ecr_repository_conformance" {
-  description = "Container repository for the conformance binary."
+  description = "Container repository for the conformance binary, with the tag."
   type        = string
 }
 
 variable "ecr_repository_hammer" {
-  description = "Container repository for the hammer binary."
+  description = "Container repository for the hammer binary, with the tag."
   type        = string
 }
