@@ -258,7 +258,6 @@ data "aws_iam_policy_document" "allow_access_from_vpce" {
     condition {
      test = "StringEquals"
      variable = "aws:sourceVpce" 
-     # TODO(phboneff): replace with real VPC ID
      values = [aws_vpc_endpoint.s3.id]
     }
   }
