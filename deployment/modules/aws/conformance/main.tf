@@ -1,3 +1,4 @@
+# Header
 terraform {
   backend "s3" {}
   required_providers {
@@ -43,6 +44,7 @@ resource "aws_ecs_cluster_capacity_providers" "conformance-test" {
 resource "aws_ecs_task_definition" "conformance" {
   family                   = "conformance"
   requires_compatibilities = ["FARGATE"]
+  # Required network_mode for tasks running on Fargate
   network_mode             = "awsvpc"
   cpu                      = 1024
   memory                   = 2048
@@ -103,6 +105,7 @@ resource "aws_ecs_task_definition" "conformance" {
 resource "aws_ecs_task_definition" "hammer" {
   family                   = "hammer"
   requires_compatibilities = ["FARGATE"]
+  # Required network_mode for tasks running on Fargate
   network_mode             = "awsvpc"
   cpu                      = 1024
   memory                   = 2048
