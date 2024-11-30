@@ -234,16 +234,10 @@ data "aws_subnets" "subnets" {
   }
 }
 
-resource "aws_route_table" "rtb" {
-  vpc_id = aws_default_vpc.default.id
-}
-
 resource "aws_vpc_endpoint_route_table_association" "private_s3" {
   vpc_endpoint_id = aws_vpc_endpoint.s3.id
-  route_table_id  = aws_route_table.rtb.id
+  route_table_id  = aws_default_vpc.default.default_route_table_id
 }
-
-
 
 resource "aws_s3_bucket_policy" "allow_access_from_vpce" {
   bucket = module.storage.log_bucket.id
