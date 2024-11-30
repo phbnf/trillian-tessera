@@ -263,6 +263,9 @@ resource "aws_ecs_task_definition" "conformance-all" {
   }
 }
 
+resource "aws_service_discovery_http_namespace" "conformance" {
+  name        = "conformance"
+}
 
 resource "aws_ecs_service" "conformance_service" {
   name            = "${local.name}-conformance"
@@ -284,6 +287,7 @@ resource "aws_ecs_service" "conformance_service" {
 
   service_connect_configuration {
    enabled   = true
+   namespace = aws_service_discovery_http_namespace.conformance.arn
    service {
     discovery_name = "conformance"
     port_name = "conformance-2024-tcp" 
