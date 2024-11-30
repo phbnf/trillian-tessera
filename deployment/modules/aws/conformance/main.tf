@@ -152,7 +152,7 @@ resource "aws_ecs_task_definition" "conformance" {
     }],
     "essential": true,
     "command": [
-      "--signer=PRIVATE+KEY+phboneff-dev-ci-conformance+3f5267c1+AbNthDVVl8SUoHuxMtSxGjHXi5R+CivYtyO7M2TPVSi6",
+      "--signer=${var.signer}",
       "--bucket=${module.storage.log_bucket.id}",
       "--db_user=root",
       "--db_password=password",
@@ -236,7 +236,7 @@ resource "aws_ecs_task_definition" "hammer" {
     }],
     "essential": true,
     "command": [
-      "--log_public_key=phboneff-dev-ci-conformance+3f5267c1+AatjnH2pMn2wRamVV1hywQI/+lHsV8ftCBroiCWyOUWQ",
+      "--log_public_key=${var.verifier}",
       "--log_url=https://${module.storage.log_bucket.bucket_regional_domain_name}",
       "--write_log_url=http://${aws_service_discovery_service.conformance_discovery.name}.${aws_service_discovery_private_dns_namespace.internal.name}:${local.port}",
       "-v=3",
