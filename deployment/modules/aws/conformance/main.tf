@@ -265,10 +265,10 @@ resource "aws_ecs_task_definition" "conformance-all" {
 
 
 resource "aws_ecs_service" "conformance_service" {
-  name            = "${local.name}-conformance-all"
+  name            = "${local.name}-conformance"
   # cluster         = aws_ecs_cluster.conformance-test.arn
-  task_definition = aws_ecs_task_definition.conformance-all.arn
-  desired_count   = 1
+  task_definition = aws_ecs_task_definition.conformance.arn
+  desired_count   = 3
   network_configuration {
     subnets = [aws_default_subnet.subnet.id]
     # required to access container registry
