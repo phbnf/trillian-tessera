@@ -266,7 +266,7 @@ resource "aws_ecs_task_definition" "conformance-all" {
 
 resource "aws_ecs_service" "conformance_service" {
   name            = "${local.name}-conformance"
-  # cluster         = aws_ecs_cluster.conformance-test.arn
+  cluster         = aws_ecs_cluster.conformance-test.arn
   task_definition = aws_ecs_task_definition.conformance.arn
   desired_count   = 3
   network_configuration {
