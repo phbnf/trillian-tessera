@@ -119,6 +119,7 @@ resource "aws_ecs_task_definition" "hammer" {
   container_definitions = jsonencode([
     {
             "name": "${local.name}-hammer",
+            # TODO(phboneff): change this
             "image": "869935063533.dkr.ecr.us-east-1.amazonaws.com/transparency-dev/phbtest-hammer:latest",
             "cpu": 0,
             "portMappings": [
@@ -134,7 +135,7 @@ resource "aws_ecs_task_definition" "hammer" {
             "command": [
                 "--log_public_key=phboneff-dev-ci-conformance+3f5267c1+AatjnH2pMn2wRamVV1hywQI/+lHsV8ftCBroiCWyOUWQ",
                 "--log_url=https://phboneff-dev-ci-conformance-bucket.s3.us-east-1.amazonaws.com",
-                "--write_log_url=http://127.0.0.1:2024",
+                "--write_log_url=http://${aws_service_discovery_service.conformance-discovery.name}.${aws_service_discovery_private_dns_namespace.internal.name}:2024",
                 "-v=3",
                 "--show_ui=false",
                 "--logtostderr",
@@ -146,7 +147,7 @@ resource "aws_ecs_task_definition" "hammer" {
             "logConfiguration": {
                 "logDriver": "awslogs",
                 "options": {
-                    "awslogs-group": "/ecs/${local.name}--hammer",
+                    "awslogs-group": "/ecs/${local.name}-hammer",
                     "mode": "non-blocking",
                     "awslogs-create-group": "true",
                     "max-buffer-size": "25m",
@@ -155,106 +156,6 @@ resource "aws_ecs_task_definition" "hammer" {
                 },
             },
         }
-  ])
-
-  runtime_platform {
-    operating_system_family = "LINUX"
-    cpu_architecture        = "X86_64"
-  }
-}
-
-resource "aws_ecs_task_definition" "conformance-all" {
-  family                   = "conformance-all"
-  requires_compatibilities = ["FARGATE"]
-  network_mode             = "awsvpc"
-  cpu                      = 2048
-  memory                   = 4096
-  # TODO(phboneff): change this
-  task_role_arn            = "arn:aws:iam::869935063533:role/ecsTaskExecutionRole"
-  execution_role_arn       = "arn:aws:iam::869935063533:role/ecsTaskExecutionRole"
-  container_definitions = jsonencode([
-    {
-       "name": "${local.name}-conformance",
-       "image": "869935063533.dkr.ecr.us-east-1.amazonaws.com/transparency-dev/phbtest-trillian-tessera",
-       "cpu": 1024,
-       "memory": 2048,
-       "portMappings": [
-           {
-               "name": "conformance-2024-tcp",
-               "containerPort": 2024,
-               "hostPort": 2024,
-               "protocol": "tcp",
-               "appProtocol": "http"
-           }
-       ],
-       "essential": true,
-       "command": [
-           "--signer",
-           "PRIVATE+KEY+phboneff-dev-ci-conformance+3f5267c1+AbNthDVVl8SUoHuxMtSxGjHXi5R+CivYtyO7M2TPVSi6",
-           "--bucket",
-           "phboneff-dev-ci-conformance-bucket",
-           "--db_user",
-           "root",
-           "--db_password",
-           "password",
-           "--db_name",
-           "tessera",
-           "--db_host",
-           "phboneff-dev-ci-conformance-writer-0.cbw8guwmo1hn.us-east-1.rds.amazonaws.com",
-           "-v",
-           "2"
-       ],
-       "logConfiguration": {
-           "logDriver": "awslogs",
-           "options": {
-               "awslogs-group": "/ecs/${local.name}-conformance-all-conformance",
-               "mode": "non-blocking",
-               "awslogs-create-group": "true",
-               "max-buffer-size": "25m",
-               "awslogs-region": "us-east-1",
-               "awslogs-stream-prefix": "ecs"
-           },
-       },
-    },
-    {
-       "name": "${local.name}-hammer",
-       "image": "869935063533.dkr.ecr.us-east-1.amazonaws.com/transparency-dev/phbtest-hammer:latest",
-       "cpu": 1024,
-       "memory": 2048,
-       "portMappings": [
-           {
-               "name": "hammer-80-tcp",
-               "containerPort": 80,
-               "hostPort": 80,
-               "protocol": "tcp",
-               "appProtocol": "http"
-           }
-       ],
-       "essential": true,
-       "command": [
-           "--log_public_key=phboneff-dev-ci-conformance+3f5267c1+AatjnH2pMn2wRamVV1hywQI/+lHsV8ftCBroiCWyOUWQ",
-           "--log_url=https://phboneff-dev-ci-conformance-bucket.s3.us-east-1.amazonaws.com",
-           "--write_log_url=http://127.0.0.1:2024",
-           "-v=3",
-           "--show_ui=false",
-           "--logtostderr",
-           "--num_writers=1100",
-           "--max_write_ops=1500",
-           "--leaf_min_size=1024",
-           "--leaf_write_goal=50000"
-          ],
-          "logConfiguration": {
-              "logDriver": "awslogs",
-              "options": {
-                  "awslogs-group": "/ecs/${local.name}-conformance-all-hammer",
-                  "mode": "non-blocking",
-                  "awslogs-create-group": "true",
-                  "max-buffer-size": "25m",
-                  "awslogs-region": "us-east-1",
-                  "awslogs-stream-prefix": "ecs"
-              },
-          },
-    }
   ])
 
   runtime_platform {
@@ -310,19 +211,10 @@ resource "aws_ecs_service" "conformance_service" {
     registry_arn = aws_service_discovery_service.conformance-discovery.arn
   }
   
-  service_connect_configuration {
-   enabled   = true
-   namespace = aws_service_discovery_private_dns_namespace.internal.arn
-   service {
-    discovery_name = "conformance"
-    port_name = "conformance-2024-tcp" 
-    client_alias {
-      dns_name = "conformance"
-      port = 2024
-    }
-   }
-  }
-  # TODO(phboneff): add a depdnency on namespace
+  depends_on = [
+    aws_service_discovery_private_dns_namespace.internal,
+    aws_service_discovery_service.conformance-discovery
+  ]
 }
 
 #resource "aws_default_vpc" "default" {
@@ -340,12 +232,12 @@ resource "aws_default_subnet" "subnet" {
 
 
 # TODO(phboneff): rename this
-resource "aws_s3_bucket_policy" "allow_access_from_another_account" {
+resource "aws_s3_bucket_policy" "allow_access_from_vpce" {
   bucket = module.storage.log_bucket.id
-  policy = data.aws_iam_policy_document.allow_access_from_another_account.json
+  policy = data.aws_iam_policy_document.allow_access_from_vpce.json
 }
 
-data "aws_iam_policy_document" "allow_access_from_another_account" {
+data "aws_iam_policy_document" "allow_access_from_vpce" {
   statement {
     principals {
       type        = "*"
