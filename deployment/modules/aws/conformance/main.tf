@@ -115,7 +115,7 @@ resource "aws_ecs_task_definition" "hammer" {
   container_definitions = jsonencode([
     {
             "name": "${local.name}-hammer",
-            "image": "${var.ecr_registry}/${var.ecr_repository_conformance}:latest",
+            "image": "${var.ecr_registry}/${var.ecr_repository_hammer}:latest",
             "cpu": 0,
             "portMappings": [
                 {
