@@ -281,6 +281,18 @@ resource "aws_ecs_service" "conformance_service" {
   }
 
   launch_type = "FARGATE"
+
+  service_connect_configuration {
+   enabled   = true
+   service {
+    discovery_name = "conformance"
+    port_name = "conformance-2024-tcp" 
+    client_alias {
+      dns_name = "conformance"
+      port = 2024
+    }
+   }
+  }
 }
 
 #resource "aws_default_vpc" "default" {
