@@ -90,7 +90,7 @@ resource "aws_ecs_task_definition" "conformance" {
             "logConfiguration": {
                 "logDriver": "awslogs",
                 "options": {
-                    "awslogs-group": "/ecs/${local.name}-conformance-conformance",
+                    "awslogs-group": "/ecs/${local.name}",
                     "mode": "non-blocking",
                     "awslogs-create-group": "true",
                     "max-buffer-size": "25m",
@@ -146,7 +146,7 @@ resource "aws_ecs_task_definition" "hammer" {
             "logConfiguration": {
                 "logDriver": "awslogs",
                 "options": {
-                    "awslogs-group": "/ecs/${local.name}-conformance-hammer",
+                    "awslogs-group": "/ecs/${local.name}--hammer",
                     "mode": "non-blocking",
                     "awslogs-create-group": "true",
                     "max-buffer-size": "25m",
@@ -167,8 +167,8 @@ resource "aws_ecs_task_definition" "conformance-all" {
   family                   = "conformance-all"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = 1024
-  memory                   = 2048
+  cpu                      = 2048
+  memory                   = 4096
   # TODO(phboneff): change this
   task_role_arn            = "arn:aws:iam::869935063533:role/ecsTaskExecutionRole"
   execution_role_arn       = "arn:aws:iam::869935063533:role/ecsTaskExecutionRole"
@@ -176,7 +176,8 @@ resource "aws_ecs_task_definition" "conformance-all" {
     {
        "name": "${local.name}-conformance",
        "image": "869935063533.dkr.ecr.us-east-1.amazonaws.com/transparency-dev/phbtest-trillian-tessera",
-       "cpu": 0,
+       "cpu": 1024,
+       "memory": 2048,
        "portMappings": [
            {
                "name": "conformance-2024-tcp",
@@ -218,7 +219,8 @@ resource "aws_ecs_task_definition" "conformance-all" {
     {
        "name": "${local.name}-hammer",
        "image": "869935063533.dkr.ecr.us-east-1.amazonaws.com/transparency-dev/phbtest-hammer:latest",
-       "cpu": 0,
+       "cpu": 1024,
+       "memory": 2048,
        "portMappings": [
            {
                "name": "hammer-80-tcp",
@@ -287,6 +289,7 @@ resource "aws_default_subnet" "subnet" {
 }
 
 
+# TODO(phboneff): rename this
 resource "aws_s3_bucket_policy" "allow_access_from_another_account" {
   bucket = module.storage.log_bucket.id
   policy = data.aws_iam_policy_document.allow_access_from_another_account.json
