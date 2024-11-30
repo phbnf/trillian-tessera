@@ -217,11 +217,16 @@ resource "aws_ecs_service" "conformance_service" {
   ]
 }
 
-#resource "aws_default_vpc" "default" {
-#  tags = {
-#    Name = "Default VPC"
-#  }
-#}
+resource "aws_default_vpc" "default" {
+  tags = {
+    Name = "Default VPC"
+  }
+}
+
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id       = aws_default_vpc.default.id
+  service_name = "com.amazonaws.${var.region}.s3"
+}
 
 resource "aws_default_subnet" "subnet" {
  #vpc_id                  = aws_default_vpc.default.id
