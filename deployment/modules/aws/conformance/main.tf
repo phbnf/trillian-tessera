@@ -195,7 +195,7 @@ resource "aws_ecs_service" "conformance_service" {
   task_definition = aws_ecs_task_definition.conformance.arn
   desired_count   = 3
   network_configuration {
-    subnets = [aws_default_subnet.subnet.id]
+    subnets = data.aws_subnets.subnets.ids
     # required to access container registry
     assign_public_ip = true
   }
@@ -228,15 +228,24 @@ resource "aws_vpc_endpoint" "s3" {
   service_name = "com.amazonaws.${var.region}.s3"
 }
 
-resource "aws_default_subnet" "subnet" {
- #vpc_id                  = aws_default_vpc.default.id
- #cidr_block              = cidrsubnet(aws_vpc.main.cidr_block, 8, 1)
- #map_public_ip_on_launch = true
- availability_zone       = "${var.region}a"
+data "aws_subnets" "subnets" {
+  filter {
+    name   = "vpc-id"
+    values = [aws_default_vpc.default.id]
+  }
+}
+
+resource "aws_route_table" "rtb" {
+  vpc_id = aws_default_vpc.default.id
+}
+
+resource "aws_vpc_endpoint_route_table_association" "private_s3" {
+  vpc_endpoint_id = aws_default_vpc.default.id
+  route_table_id  = aws_route_table.rtb.id
 }
 
 
-# TODO(phboneff): rename this
+
 resource "aws_s3_bucket_policy" "allow_access_from_vpce" {
   bucket = module.storage.log_bucket.id
   policy = data.aws_iam_policy_document.allow_access_from_vpce.json
