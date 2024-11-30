@@ -53,7 +53,7 @@ resource "aws_ecs_task_definition" "conformance" {
   container_definitions = jsonencode([
     {
             "name": "${local.name}-conformance",
-            "image": "${var.ecr_registry}/${var.ecr_repository_conformance}",
+            "image": "${var.ecr_registry}/${var.ecr_repository_conformance}:latest",
             "cpu": 0,
             "portMappings": [
                 {
@@ -113,8 +113,7 @@ resource "aws_ecs_task_definition" "hammer" {
   container_definitions = jsonencode([
     {
             "name": "${local.name}-hammer",
-            "image": "${var.ecr_registry}/${var.ecr_repository_conformance}",
-            "image": "869935063533.dkr.ecr.us-east-1.amazonaws.com/transparency-dev/phbtest-hammer:latest",
+            "image": "${var.ecr_registry}/${var.ecr_repository_conformance}:latest",
             "cpu": 0,
             "portMappings": [
                 {
