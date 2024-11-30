@@ -32,3 +32,13 @@ variable "ecr_repository_hammer" {
   description = "Container repository for the hammer binary, with the tag."
   type        = string
 }
+
+variable "signer" {
+  description = "The note signer which used to sign checkpoints"
+  type        = string
+}
+
+variable "verifier" {
+  description = "The note verifier used to verify checkpoints"
+  type        = string
+}

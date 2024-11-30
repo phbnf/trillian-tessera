@@ -182,12 +182,12 @@ resource "aws_ecs_task_definition" "conformance" {
 }
 
 resource "aws_ecs_service" "conformance_service" {
-  name            = "${local.name}"
-  task_definition = aws_ecs_task_definition.conformance.arn
-  cluster         = aws_ecs_cluster.ecs_cluster.arn
-  launch_type     = "FARGATE"
-  desired_count   = 3
-  force_new_deployment = true
+  name                  = "${local.name}"
+  task_definition       = aws_ecs_task_definition.conformance.arn
+  cluster               = aws_ecs_cluster.ecs_cluster.arn
+  launch_type           = "FARGATE"
+  desired_count         = 3
+  force_new_deployment  = true
   wait_for_steady_state = true
   # redeploy on every apply
   triggers = {
@@ -200,12 +200,10 @@ resource "aws_ecs_service" "conformance_service" {
     assign_public_ip = true
   }
 
-
   # connect the service with the service discovery defined above
   service_registries {
     registry_arn = aws_service_discovery_service.conformance_discovery.arn
   }
-
   
   depends_on = [
     aws_service_discovery_private_dns_namespace.internal,
