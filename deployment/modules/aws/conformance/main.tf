@@ -318,6 +318,7 @@ resource "aws_ecs_service" "conformance_service" {
     }
    }
   }
+  # TODO(phboneff): add a depdnency on namespace
 }
 
 #resource "aws_default_vpc" "default" {
