@@ -166,8 +166,7 @@ resource "aws_ecs_task_definition" "hammer" {
 
 resource "aws_service_discovery_private_dns_namespace" "internal" {
   name        = "internal"
-  # TODO(phbonef): repalce with better
-  vpc         = aws_default_subnet.subnet.vpc_id
+  vpc         = aws_default_vpc.default.id
 }
 
 resource "aws_service_discovery_service" "conformance-discovery" {
