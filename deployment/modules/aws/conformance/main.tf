@@ -8,8 +8,6 @@ terraform {
   }
 }
 
-data "aws_caller_identity" "current" {}
-
 locals {
   name = "${var.prefix_name}-${var.base_name}"
   port = 2024
