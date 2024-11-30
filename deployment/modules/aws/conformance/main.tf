@@ -213,6 +213,15 @@ resource "aws_ecs_service" "conformance_service" {
   ]
 }
 
+## Hammer task ################################################################
+# Launch the hammer manually with the following command: 
+# aws ecs run-task \
+#   --cluster= \
+#   --task-definition=hammer \
+#   --count=1 \
+#   --launch-type=FARGATE \
+#   --network-configuration='{"awsvpcConfiguration": {"assignPublicIp":"ENABLED","subnets": ["subnet-001ff6c1e47ec0164"]}}
+
 resource "aws_ecs_task_definition" "hammer" {
   family                   = "hammer"
   requires_compatibilities = ["FARGATE"]
