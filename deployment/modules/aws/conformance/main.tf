@@ -79,7 +79,7 @@ resource "aws_ecs_task_definition" "conformance" {
                 "--db_host",
                 "${module.storage.log_rds_db.endpoint}",
                 "--db_port",
-                module.storage.log_rds_db.port,
+                "${module.storage.log_rds_db.port}",
                 "-v",
                 "2"
             ],
