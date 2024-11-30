@@ -274,6 +274,12 @@ resource "aws_ecs_service" "conformance_service" {
     assign_public_ip = false
   }
   force_new_deployment = true
+  # redeployment on every apply
+  triggers = {
+    redeployment = plantimestamp()
+  }
+
+  launch_type = "FARGATE"
 }
 
 #resource "aws_default_vpc" "default" {
