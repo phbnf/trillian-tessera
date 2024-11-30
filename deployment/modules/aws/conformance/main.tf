@@ -204,17 +204,17 @@ resource "aws_ecs_task_definition" "conformance-all" {
            "-v",
            "2"
        ],
-       #"logConfiguration": {
-       #    "logDriver": "awslogs",
-       #    "options": {
-       #        "awslogs-group": "/ecs/${local.name}-conformance-all-conformance",
-       #        "mode": "non-blocking",
-       #        "awslogs-create-group": "true",
-       #        "max-buffer-size": "25m",
-       #        "awslogs-region": "us-east-1",
-       #        "awslogs-stream-prefix": "ecs"
-       #    },
-       #},
+       "logConfiguration": {
+           "logDriver": "awslogs",
+           "options": {
+               "awslogs-group": "/ecs/${local.name}-conformance-all-conformance",
+               "mode": "non-blocking",
+               "awslogs-create-group": "true",
+               "max-buffer-size": "25m",
+               "awslogs-region": "us-east-1",
+               "awslogs-stream-prefix": "ecs"
+           },
+       },
     },
     {
        "name": "${local.name}-hammer",
@@ -243,17 +243,17 @@ resource "aws_ecs_task_definition" "conformance-all" {
            "--leaf_min_size=1024",
            "--leaf_write_goal=50000"
           ],
-          #"logConfiguration": {
-          #    "logDriver": "awslogs",
-          #    "options": {
-          #        "awslogs-group": "/ecs/${local.name}-conformance-all-hammer",
-          #        "mode": "non-blocking",
-          #        "awslogs-create-group": "true",
-          #        "max-buffer-size": "25m",
-          #        "awslogs-region": "us-east-1",
-          #        "awslogs-stream-prefix": "ecs"
-          #    },
-          #},
+          "logConfiguration": {
+              "logDriver": "awslogs",
+              "options": {
+                  "awslogs-group": "/ecs/${local.name}-conformance-all-hammer",
+                  "mode": "non-blocking",
+                  "awslogs-create-group": "true",
+                  "max-buffer-size": "25m",
+                  "awslogs-region": "us-east-1",
+                  "awslogs-stream-prefix": "ecs"
+              },
+          },
     }
   ])
 
@@ -268,11 +268,12 @@ resource "aws_ecs_service" "conformance_service" {
   name            = "${local.name}-conformance-all"
   cluster         = aws_ecs_cluster.conformance-test.arn
   task_definition = aws_ecs_task_definition.conformance-all.arn
-  desired_count   = 3
+  desired_count   = 1
   network_configuration {
     subnets = [aws_default_subnet.subnet.id]
     assign_public_ip = false
   }
+  force_new_deployment = true
 }
 
 #resource "aws_default_vpc" "default" {
