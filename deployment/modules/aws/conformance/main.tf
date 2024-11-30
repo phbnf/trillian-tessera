@@ -306,6 +306,10 @@ resource "aws_ecs_service" "conformance_service" {
 
   launch_type = "FARGATE"
 
+  service_registries {
+    registry_arn = aws_service_discovery_service.conformance-discovery.arn
+  }
+  
   service_connect_configuration {
    enabled   = true
    namespace = aws_service_discovery_private_dns_namespace.internal.arn
