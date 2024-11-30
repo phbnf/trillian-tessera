@@ -271,7 +271,8 @@ resource "aws_ecs_service" "conformance_service" {
   desired_count   = 1
   network_configuration {
     subnets = [aws_default_subnet.subnet.id]
-    assign_public_ip = false
+    # required to access container registry
+    assign_public_ip = true
   }
   force_new_deployment = true
   # redeployment on every apply
