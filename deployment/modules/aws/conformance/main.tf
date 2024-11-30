@@ -60,8 +60,8 @@ data "aws_subnets" "subnets" {
 # This will by the hammer to contact multiple conformance tasks with a single
 # dns name.
 resource "aws_service_discovery_private_dns_namespace" "internal" {
-  name        = "internal"
-  vpc         = aws_default_vpc.default.id
+  name = "internal"
+  vpc  = aws_default_vpc.default.id
 }
 
 resource "aws_service_discovery_service" "conformance_discovery" {
@@ -139,51 +139,47 @@ resource "aws_ecs_task_definition" "conformance" {
   # TODO(phboneff): change this
   task_role_arn            = "arn:aws:iam::869935063533:role/ecsTaskExecutionRole"
   execution_role_arn       = "arn:aws:iam::869935063533:role/ecsTaskExecutionRole"
-  container_definitions = jsonencode([
-    {
-            "name": "${local.name}-conformance",
-            "image": "${var.ecr_registry}/${var.ecr_repository_conformance}:latest",
-            "cpu": 0,
-            "portMappings": [
-                {
-                    "name": "conformance-${local.port}-tcp",
-                    "containerPort": local.port,
-                    "hostPort": local.port,
-                    "protocol": "tcp",
-                    "appProtocol": "http"
-                }
-            ],
-            "essential": true,
-            "command": [
-                "--signer",
-                "PRIVATE+KEY+phboneff-dev-ci-conformance+3f5267c1+AbNthDVVl8SUoHuxMtSxGjHXi5R+CivYtyO7M2TPVSi6",
-                "--bucket",
-                "${module.storage.log_bucket.id}",
-                "phboneff-dev-ci-conformance-bucket",
-                "--db_user",
-                "root",
-                "--db_password",
-                "password",
-                "--db_name",
-                "tessera",
-                "--db_host",
-                "${module.storage.log_rds_db.endpoint}",
-                "-v",
-                "2"
-            ],
-            "logConfiguration": {
-                "logDriver": "awslogs",
-                "options": {
-                    "awslogs-group": "/ecs/${local.name}",
-                    "mode": "non-blocking",
-                    "awslogs-create-group": "true",
-                    "max-buffer-size": "25m",
-                    "awslogs-region": "us-east-1",
-                    "awslogs-stream-prefix": "ecs"
-                },
-            },
-        },
-  ])
+  container_definitions    = jsonencode([{
+    "name": "${local.name}-conformance",
+    "image": "${var.ecr_registry}/${var.ecr_repository_conformance}:latest",
+    "cpu": 0,
+    "portMappings": [{
+      "name": "conformance-${local.port}-tcp",
+      "containerPort": local.port,
+      "hostPort": local.port,
+      "protocol": "tcp",
+      "appProtocol": "http"
+    }],
+    "essential": true,
+    "command": [
+      "--signer",
+      "PRIVATE+KEY+phboneff-dev-ci-conformance+3f5267c1+AbNthDVVl8SUoHuxMtSxGjHXi5R+CivYtyO7M2TPVSi6",
+      "--bucket",
+      "${module.storage.log_bucket.id}",
+      "phboneff-dev-ci-conformance-bucket",
+      "--db_user",
+      "root",
+      "--db_password",
+      "password",
+      "--db_name",
+      "tessera",
+      "--db_host",
+      "${module.storage.log_rds_db.endpoint}",
+      "-v",
+      "2"
+    ],
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "/ecs/${local.name}",
+        "mode": "non-blocking",
+        "awslogs-create-group": "true",
+        "max-buffer-size": "25m",
+        "awslogs-region": "us-east-1",
+        "awslogs-stream-prefix": "ecs"
+      },
+    },
+  }])
 
   runtime_platform {
     operating_system_family = "LINUX"
@@ -195,28 +191,29 @@ resource "aws_ecs_task_definition" "conformance" {
 
 resource "aws_ecs_service" "conformance_service" {
   name            = "${local.name}"
-  cluster         = aws_ecs_cluster.ecs_cluster.arn
   task_definition = aws_ecs_task_definition.conformance.arn
+  cluster         = aws_ecs_cluster.ecs_cluster.arn
+  launch_type     = "FARGATE"
   desired_count   = 3
-  network_configuration {
-    subnets = data.aws_subnets.subnets.ids
-    # required to access container registry
-    assign_public_ip = true
-  }
   force_new_deployment = true
+  wait_for_steady_state = true
   # redeploy on every apply
   triggers = {
     redeployment = plantimestamp()
   }
 
-  launch_type = "FARGATE"
+  network_configuration {
+    subnets = data.aws_subnets.subnets.ids
+    # required to access container registry
+    assign_public_ip = true
+  }
+
 
   # connect the service with the service discovery defined above
   service_registries {
     registry_arn = aws_service_discovery_service.conformance_discovery.arn
   }
 
-  wait_for_steady_state = true
   
   depends_on = [
     aws_service_discovery_private_dns_namespace.internal,
@@ -236,46 +233,42 @@ resource "aws_ecs_task_definition" "hammer" {
   # TODO(phboneff): change this
   task_role_arn            = "arn:aws:iam::869935063533:role/ecsTaskExecutionRole"
   execution_role_arn       = "arn:aws:iam::869935063533:role/ecsTaskExecutionRole"
-  container_definitions = jsonencode([
-    {
-            "name": "${local.name}-hammer",
-            "image": "${var.ecr_registry}/${var.ecr_repository_hammer}:latest",
-            "cpu": 0,
-            "portMappings": [
-                {
-                    "name": "hammer-80-tcp",
-                    "containerPort": 80,
-                    "hostPort": 80,
-                    "protocol": "tcp",
-                    "appProtocol": "http"
-                }
-            ],
-            "essential": true,
-            "command": [
-                "--log_public_key=phboneff-dev-ci-conformance+3f5267c1+AatjnH2pMn2wRamVV1hywQI/+lHsV8ftCBroiCWyOUWQ",
-                "--log_url=https://${module.storage.log_bucket.bucket_regional_domain_name}",
-                "--write_log_url=http://${aws_service_discovery_service.conformance_discovery.name}.${aws_service_discovery_private_dns_namespace.internal.name}:${local.port}",
-                "-v=3",
-                "--show_ui=false",
-                "--logtostderr",
-                "--num_writers=1100",
-                "--max_write_ops=1500",
-                "--leaf_min_size=1024",
-                "--leaf_write_goal=50000"
-            ],
-            "logConfiguration": {
-                "logDriver": "awslogs",
-                "options": {
-                    "awslogs-group": "/ecs/${local.name}-hammer",
-                    "mode": "non-blocking",
-                    "awslogs-create-group": "true",
-                    "max-buffer-size": "25m",
-                    "awslogs-region": "us-east-1",
-                    "awslogs-stream-prefix": "ecs"
-                },
-            },
-        }
-  ])
+  container_definitions = jsonencode([{
+    "name": "${local.name}-hammer",
+    "image": "${var.ecr_registry}/${var.ecr_repository_hammer}:latest",
+    "cpu": 0,
+    "portMappings": [{
+      "name": "hammer-80-tcp",
+      "containerPort": 80,
+      "hostPort": 80,
+      "protocol": "tcp",
+      "appProtocol": "http"
+    }],
+    "essential": true,
+    "command": [
+      "--log_public_key=phboneff-dev-ci-conformance+3f5267c1+AatjnH2pMn2wRamVV1hywQI/+lHsV8ftCBroiCWyOUWQ",
+      "--log_url=https://${module.storage.log_bucket.bucket_regional_domain_name}",
+      "--write_log_url=http://${aws_service_discovery_service.conformance_discovery.name}.${aws_service_discovery_private_dns_namespace.internal.name}:${local.port}",
+      "-v=3",
+      "--show_ui=false",
+      "--logtostderr",
+      "--num_writers=1100",
+      "--max_write_ops=1500",
+      "--leaf_min_size=1024",
+      "--leaf_write_goal=50000"
+    ],
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "/ecs/${local.name}-hammer",
+        "mode": "non-blocking",
+        "awslogs-create-group": "true",
+        "max-buffer-size": "25m",
+        "awslogs-region": "us-east-1",
+        "awslogs-stream-prefix": "ecs"
+      },
+    },
+  }])
 
   runtime_platform {
     operating_system_family = "LINUX"
