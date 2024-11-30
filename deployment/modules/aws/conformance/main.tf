@@ -129,7 +129,7 @@ resource "aws_ecs_task_definition" "hammer" {
             "essential": true,
             "command": [
                 "--log_public_key=phboneff-dev-ci-conformance+3f5267c1+AatjnH2pMn2wRamVV1hywQI/+lHsV8ftCBroiCWyOUWQ",
-                "--log_url=https://phboneff-dev-ci-conformance-bucket.s3.us-east-1.amazonaws.com",
+                "--log_url=https://${module.storage.log_bucket.bucket_regional_domain_name}",
                 "--write_log_url=http://${aws_service_discovery_service.conformance-discovery.name}.${aws_service_discovery_private_dns_namespace.internal.name}:2024",
                 "-v=3",
                 "--show_ui=false",
