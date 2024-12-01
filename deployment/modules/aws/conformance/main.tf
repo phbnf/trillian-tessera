@@ -44,7 +44,7 @@ resource "aws_ecs_cluster_capacity_providers" "ecs_capacity" {
 # This will be used for the containers to communicate between themselves, and
 # the S3 bucket.
 resource "aws_default_vpc" "default" {
-  tags = {
+   tags = {
     Name = "Default VPC"
   }
 }

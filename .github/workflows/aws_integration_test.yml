@@ -1,6 +1,6 @@
 name: Integration Test
 
-on: 
+on:
   push:
     branches:
       - actionbuild
@@ -8,15 +8,15 @@ on:
 permissions:
   contents: read
 
-env: 
-  tf_version: '1.10.0'
-  tg_version: '0.67.0'
-  tg_dir: 'deployment/live/aws/conformance/ci/'
+env:
+  tf_version: "1.10.0"
+  tg_version: "0.67.0"
+  tg_dir: "deployment/live/aws/conformance/ci/"
 
 jobs:
   aws-integration:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -51,10 +51,8 @@ jobs:
           echo "full_image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
       # TODO(phboneff): add a registry for the hammer
-      
       # TODO(phboneff): AuroraDB take a long time to be brouht up and down
       #   consider keeping it around between tests / using Aurora Serveless
-
       #- name: Terragrunt destroy pre test
       #  id: terragrunt-destroy
       #  uses: gruntwork-io/terragrunt-action@v2
@@ -66,7 +64,6 @@ jobs:
       #    tg_version: ${{ env.tg_version }}
       #    tg_dir: ${{ env.tg_dir }}
       #    tg_command: 'destroy'
-
       - name: Generate Tessera keys
         id: generate-keys
         shell: bash
@@ -92,11 +89,16 @@ jobs:
         env:
           # TODO(phboneff): remove this
           TESSERA_PREFIX_NAME: phboneff-dev
+          TESSERA_SIGNER: PRIVATE+KEY+phboneff-dev-ci-conformance+3f5267c1+AbNthDVVl8SUoHuxMtSxGjHXi5R+CivYtyO7M2TPVSi6
+          TESSERA_VERIFIER: phboneff-dev-ci-conformance+3f5267c1+AatjnH2pMn2wRamVV1hywQI/+lHsV8ftCBroiCWyOUWQ
+          ECR_REGISTRY: 869935063533.dkr.ecr.us-east-1.amazonaws.com
+          ECR_REPOSITORY_CONFORMANCE: transparency-dev/phbtest-trillian-tessera:latest
+          ECR_REPOSITORY_HAMMER: transparency-dev/phbtest-hammer:latest
         with:
           tf_version: ${{ env.tf_version }}
           tg_version: ${{ env.tg_version }}
           tg_dir: ${{ env.tg_dir }}
-          tg_command: 'apply'
+          tg_command: "apply"
 
       # TODO(phboneff): run conformance test on Fargate
 
