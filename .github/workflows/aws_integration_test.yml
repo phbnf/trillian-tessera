@@ -65,7 +65,7 @@ jobs:
           ECR_REPOSITORY: ${{ env.ECR_REPOSITORY_HAMMER }}
         run: |
           docker build -f ./internal/hammer/Dockerfile . -t "$ECR_REGISTRY/$ECR_REPOSITORY"
-          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY"
           echo "Pushed image to $ECR_REGISTRY/$ECR_REPOSITORY"
 
       ## Destroy any pre-existing deployment/live/aws/conformance/ci env.
