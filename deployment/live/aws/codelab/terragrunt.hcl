@@ -23,4 +23,9 @@ remote_state {
   }
 }
 
-inputs = local
+inputs {
+  region      = local.region
+  base_name   = local.base_name
+  prefix_name = local.prefix_name
+  ephemeral   = local.ephemeral
+}
