@@ -12,6 +12,12 @@ env:
   tf_version: "1.10.0"
   tg_version: "0.67.0"
   tg_dir: "deployment/live/aws/conformance/ci/"
+  TESSERA_PREFIX_NAME: phboneff-dev
+  TESSERA_SIGNER: PRIVATE+KEY+phboneff-dev-ci-conformance+3f5267c1+AbNthDVVl8SUoHuxMtSxGjHXi5R+CivYtyO7M2TPVSi6
+  TESSERA_VERIFIER: phboneff-dev-ci-conformance+3f5267c1+AatjnH2pMn2wRamVV1hywQI/+lHsV8ftCBroiCWyOUWQ
+  ECR_REGISTRY: 869935063533.dkr.ecr.us-east-1.amazonaws.com
+  ECR_REPOSITORY_CONFORMANCE: transparency-dev/phbtest-trillian-tessera:latest
+  ECR_REPOSITORY_HAMMER: transparency-dev/phbtest-hammer:latest
 
 jobs:
   aws-integration:
@@ -100,14 +106,8 @@ jobs:
       - name: Terragrunt apply
         id: terragrunt-apply
         uses: gruntwork-io/terragrunt-action@v2
-        env:
+        # env:
           # TODO(phboneff): remove this
-          TESSERA_PREFIX_NAME: phboneff-dev
-          TESSERA_SIGNER: PRIVATE+KEY+phboneff-dev-ci-conformance+3f5267c1+AbNthDVVl8SUoHuxMtSxGjHXi5R+CivYtyO7M2TPVSi6
-          TESSERA_VERIFIER: phboneff-dev-ci-conformance+3f5267c1+AatjnH2pMn2wRamVV1hywQI/+lHsV8ftCBroiCWyOUWQ
-          ECR_REGISTRY: 869935063533.dkr.ecr.us-east-1.amazonaws.com
-          ECR_REPOSITORY_CONFORMANCE: transparency-dev/phbtest-trillian-tessera:latest
-          ECR_REPOSITORY_HAMMER: transparency-dev/phbtest-hammer:latest
         with:
           tf_version: ${{ env.tf_version }}
           tg_version: ${{ env.tg_version }}
