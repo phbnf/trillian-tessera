@@ -81,7 +81,8 @@ jobs:
       #    tg_dir: ${{ env.TG_DIR }}
       #    tg_command: 'destroy'
 
-      ## Generate a new keys for the log to use.
+      ## Generate a new keys for the log to use, and export them to environment
+      ## variables for Terragrunt to use.
       - name: Generate Tessera keys
         id: generate-keys
         shell: bash
@@ -91,6 +92,8 @@ jobs:
             --out_priv=${{ runner.temp }}/key.sec \
             --out_pub=${{ runner.temp }}/key.pub
           cat ${{ runner.temp }}/key.pub
+          echo "TESSERA_SIGNER=$(cat ${{ runner.temp }}/key.sec)" >> "$GITHUB_ENV"
+          echo "TESSERA_VERIFIER=$(cat ${{ runner.temp }}/key.pub)" >> "$GITHUB_ENV"
 
       ## Apply the deployment/live/aws/conformance/ci terragrunt config.
       ## This will bring up the conformance infrastructure whitch consists of:
@@ -99,8 +102,6 @@ jobs:
       ##   - an ECS cluster to run Fargate tasks
       ##   - a conformance service, with multiple conformance binary instances
       ##   - a hammer task definition (but no execution)
-      ## Before we apply, export TESSERA_SIGNER and TESSERA_VERIFIER for
-      ## Terragrunt.
       - name: Terragrunt apply
         id: terragrunt-apply
         uses: gruntwork-io/terragrunt-action@v2
@@ -110,10 +111,6 @@ jobs:
           tg_dir: ${{ env.TG_DIR }}
           tg_command: "apply"
         env:
-          INPUT_PRE_EXEC_1: |
-            "export TESSERA_SIGNER=$(cat ${{ runner.temp }}/key.sec)"
-          INPUT_PRE_EXEC_2: |
-            "export TESSERA_VERIFIER=$(cat ${{ runner.temp }}/key.pub)"
           INPUT_POST_EXEC_1: |
             echo "ECS_CLUSTER=$(terragrunt output -raw ecs_cluster)" >> "$GITHUB_ENV"
           INPUT_POST_EXEC_2: |
