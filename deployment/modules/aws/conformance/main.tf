@@ -278,13 +278,13 @@ resource "null_resource" "hammer_task_run" {
     command = <<EOF
     aws ecs run-task \
       --cluster=${aws_ecs_cluster.ecs_cluster.id}
-      --task-definition=${aws_task_definition.hammer.arn}
+      --task-definition=${aws_ecs_task_definition.hammer.arn}
       --count=1
       --launch-type=FARGATE
       --network-configuration='{
         "awsvpcConfiguration": {
           "assignPublicIp": "ENABLED",
-          "subnets": ${aws_subnets.subnets.ids}
+          "subnets": ${data.aws_subnets.subnets.ids}
         }
       }' 
 EOF
