@@ -23,7 +23,7 @@ remote_state {
   }
 }
 
-inputs {
+inputs = {
   region      = local.region
   base_name   = local.base_name
   prefix_name = local.prefix_name
