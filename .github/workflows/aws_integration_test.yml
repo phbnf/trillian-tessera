@@ -102,7 +102,7 @@ jobs:
           INPUT_POST_EXEC_1: |
             echo "ecs_cluster=$(terragrunt output -raw ecs_cluster)" >> "$GITHUB_OUTPUT"
           INPUT_POST_EXEC_2: |
-            echo "vpc_subnets=$(terragrunt output -json vpc_subnets)" > "$GITHUB_OUTPUT"
+            echo "vpc_subnets=$(terragrunt output -json vpc_subnets)" >> "$GITHUB_OUTPUT"
 
       - name: Run Hammer
         id: hammer
