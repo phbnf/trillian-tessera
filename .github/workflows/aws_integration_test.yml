@@ -99,6 +99,8 @@ jobs:
       ##   - an ECS cluster to run Fargate tasks
       ##   - a conformance service, with multiple conformance binary instances
       ##   - a hammer task definition (but no execution)
+      ## Before we apply, export TESSERA_SIGNER and TESSERA_VERIFIER for
+      ## Terragrunt.
       - name: Terragrunt apply
         id: terragrunt-apply
         uses: gruntwork-io/terragrunt-action@v2
