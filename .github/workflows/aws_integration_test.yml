@@ -55,17 +55,17 @@ jobs:
       # TODO(phboneff): AuroraDB take a long time to be brouht up and down
       #   consider keeping it around between tests / using Aurora Serveless
 
-      - name: Terragrunt destroy pre test
-        id: terragrunt-destroy
-        uses: gruntwork-io/terragrunt-action@v2
-        env:
-          # TODO(phboneff): remove this
-          TESSERA_PREFIX_NAME: phboneff-dev
-        with:
-          tf_version: ${{ env.tf_version }}
-          tg_version: ${{ env.tg_version }}
-          tg_dir: ${{ env.tg_dir }}
-          tg_command: 'destroy'
+      #- name: Terragrunt destroy pre test
+      #  id: terragrunt-destroy
+      #  uses: gruntwork-io/terragrunt-action@v2
+      #  env:
+      #    # TODO(phboneff): remove this
+      #    TESSERA_PREFIX_NAME: phboneff-dev
+      #  with:
+      #    tf_version: ${{ env.tf_version }}
+      #    tg_version: ${{ env.tg_version }}
+      #    tg_dir: ${{ env.tg_dir }}
+      #    tg_command: 'destroy'
 
       - name: Generate Tessera keys
         id: generate-keys
@@ -100,14 +100,14 @@ jobs:
 
       # TODO(phboneff): run conformance test on Fargate
 
-      - name: Terragrunt destroy post test
-        id: terragrunt-destroy
-        uses: gruntwork-io/terragrunt-action@v2
-        env:
-          # TODO(phboneff): remove this
-          TESSERA_PREFIX_NAME: phboneff-dev
-        with:
-          tf_version: ${{ env.tf_version }}
-          tg_version: ${{ env.tg_version }}
-          tg_dir: ${{ env.tg_dir }}
-          tg_command: 'destroy'
+      #- name: Terragrunt destroy post test
+      #  id: terragrunt-destroy
+      #  uses: gruntwork-io/terragrunt-action@v2
+      #  env:
+      #    # TODO(phboneff): remove this
+      #    TESSERA_PREFIX_NAME: phboneff-dev
+      #  with:
+      #    tf_version: ${{ env.tf_version }}
+      #    tg_version: ${{ env.tg_version }}
+      #    tg_dir: ${{ env.tg_dir }}
+      #    tg_command: 'destroy'
