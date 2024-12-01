@@ -1,6 +1,6 @@
 output "vpc_subnets" {
     description = "VPC subnets list"
-    value       = join("\",\"", data.aws_subnets.subnets.ids)
+    value       = data.aws_subnets.subnets.ids
 }
 
 output "ecs_cluster" {
