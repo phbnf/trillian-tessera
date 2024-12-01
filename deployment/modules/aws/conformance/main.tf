@@ -304,3 +304,7 @@ data "local_file" "hammer_exec_output" {
   filename = "${path.module}/hammer-exec-output.json"
   depends_on  = [null_resource.hammer_task_run]
 }
+
+locals {
+  hammer_exec_output = jsonencode(data.local_file.hammer_exec_output.content)
+}
