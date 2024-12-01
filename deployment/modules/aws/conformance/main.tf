@@ -291,7 +291,8 @@ resource "null_resource" "hammer_task_run" {
           "assignPublicIp": "ENABLED",
           "subnets": ${jsonencode(data.aws_subnets.subnets.ids)}
         }
-      }' >> ${path.module}/hammer-exec-output.json
+      }';
+      echo "lolptde" >> ${path.module}/hammer-exec-output.json
 EOF
   }
 
