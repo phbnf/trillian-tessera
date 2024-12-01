@@ -113,11 +113,11 @@ jobs:
           echo ${{ steps.terragrunt-apply.outputs.ecs_cluster }} 
           echo ${{ steps.terragrunt-apply.outputs.vpc_subnets }} 
           aws ecs run-task \
-            --cluster="{{ steps.terragrunt-apply.outputs.ecs_cluster }}" \
+            --cluster="$ECS_CLUSTER" \
             --task-definition=hammer \
             --count=1 \
             --launch-type=FARGATE \
-            --network-configuration='{"awsvpcConfiguration": {"assignPublicIp":"ENABLED","subnets": '${{ steps.terragrunt-apply.outputs.vpc_subnets }}'}}' \
+            --network-configuration='{"awsvpcConfiguration": {"assignPublicIp":"ENABLED","subnets": $VPC_SUBNETS}}' \
             --query 'tasks[0].taskArn' \
           > ${{ github.workspace }}/hammer_arn.txt
           cat ${{ github.workspace }}/hammer_arn.txt 
