@@ -27,8 +27,8 @@ module "storage" {
   ephemeral   = true
 }
 
-# Resources ###################################################################
-## ECS cluster ################################################################
+# Resources ####################################################################
+## ECS cluster #################################################################
 # This will be used to run the conformance and hammer binaries on Fargate.
 resource "aws_ecs_cluster" "ecs_cluster" {
   name = "${local.name}"
@@ -85,7 +85,7 @@ resource "aws_service_discovery_service" "conformance_discovery" {
   }
 }
 
-## Connect S3 bucket to VPC ###################################################
+## Connect S3 bucket to VPC ####################################################
 # This allows the hammer to talk to a non public S3 bucket over HTTP.
 resource "aws_vpc_endpoint" "s3" {
   vpc_id       = aws_default_vpc.default.id
@@ -127,7 +127,7 @@ data "aws_iam_policy_document" "allow_access_from_vpce" {
   depends_on = [aws_vpc_endpoint.s3]
 }
 
-## Conformance task and service ###############################################
+## Conformance task and service ################################################
 # This will start multiple conformance tasks on Fargate within a service.
 resource "aws_ecs_task_definition" "conformance" {
   family                   = "conformance"
@@ -207,7 +207,7 @@ resource "aws_ecs_service" "conformance_service" {
   ]
 }
 
-## Hammer task ################################################################
+## Hammer task #################################################################
 # Launch the hammer manually with the following command: 
 # aws ecs run-task \
 #   --cluster="$(terragrunt output -raw ecs_cluster)" \
