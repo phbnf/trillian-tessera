@@ -22,3 +22,5 @@ remote_state {
     }
   }
 }
+
+inputs = locals
