@@ -187,12 +187,6 @@ resource "aws_ecs_service" "conformance_service" {
   launch_type           = "FARGATE"
   desired_count         = 3
   wait_for_steady_state = true
-  # redeploy on every apply
-  # TODO(phboneff): decide whether we need this
-  # force_new_deployment  = true
-  # triggers = {
-  #   redeployment = plantimestamp()
-  # }
 
   network_configuration {
     subnets = data.aws_subnets.subnets.ids
@@ -216,11 +210,11 @@ resource "aws_ecs_service" "conformance_service" {
 ## Hammer task ################################################################
 # Launch the hammer manually with the following command: 
 # aws ecs run-task \
-#   --cluster= \
+#   --cluster="$(terragrunt output -raw ecs_cluster)" \
 #   --task-definition=hammer \
 #   --count=1 \
 #   --launch-type=FARGATE \
-#   --network-configuration='{"awsvpcConfiguration": {"assignPublicIp":"ENABLED","subnets": ["subnet-001ff6c1e47ec0164"]}}
+#   --network-configuration='{"awsvpcConfiguration": {"assignPublicIp":"ENABLED","subnets": '$(terragrunt output -json vpc_subnets)'}}'
 
 resource "aws_ecs_task_definition" "hammer" {
   family                   = "hammer"
