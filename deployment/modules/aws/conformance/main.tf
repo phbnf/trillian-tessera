@@ -207,8 +207,8 @@ resource "aws_ecs_service" "conformance_service" {
   ]
 }
 
-## Hammer task #################################################################
-# Launch the hammer manually with the following command: 
+## Hammer task definition and execution ########################################
+# The hammer can also be launched manually with the following command: 
 # aws ecs run-task \
 #   --cluster="$(terragrunt output -raw ecs_cluster)" \
 #   --task-definition=hammer \
@@ -307,5 +307,5 @@ data "local_file" "hammer_exec_output" {
 }
 
 locals {
-  hammer_exec_output = jsondecode(data.local_file.hammer_exec_output.content)
+  hammer_task_arn = jsondecode(data.local_file.hammer_exec_output.content).tasks[0].taskArn
 }
