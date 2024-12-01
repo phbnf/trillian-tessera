@@ -294,3 +294,8 @@ EOF
     aws_ecs_task_definition.hammer
   ]
 }
+
+data "external" "json" {
+  depends_on  = [null_resource.hammer_task_run]
+  program     = ["echo", "${null_resource.hammer_task_run}"]
+}
