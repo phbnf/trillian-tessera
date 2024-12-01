@@ -108,6 +108,7 @@ jobs:
         id: hammer
         shell: bash
         run: |
+          echo "Will launch a `hammer` ECS task."
           HAMMER_ARN=$(aws ecs run-task \
             --cluster="$ECS_CLUSTER" \
             --task-definition=hammer \
@@ -115,10 +116,10 @@ jobs:
             --launch-type=FARGATE \
             --network-configuration='{"awsvpcConfiguration": {"assignPublicIp":"ENABLED","subnets": '$VPC_SUBNETS'}}' \
             --query 'tasks[0].taskArn')
-          echo "Hammer task running, ARN: $HAMMER_ARN"
-          echo "Waiting for execution to be done..."
+          echo "Hammer task running, ARN: $HAMMER_ARN."
+          echo "Waiting for task to stop..."
           aws ecs wait tasks-stopped --cluster="$ECS_CLUSTER" --tasks=[$HAMMER_ARN]
-          echo "Execution done, fetching exit code and returning this action with it"
+          echo "The task has stopped. Fetching exit code and returning this action with it."
           exit $(aws ecs describe-tasks --cluster="$ECS_CLUSTER" --tasks=[$HAMMER_ARN] --query 'tasks[0].containers[0].exitCode')
 
 #          echo "Hammer task running, ARN: $(cat ${{ github.workspace }}/hammer_arn.txt)"
