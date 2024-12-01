@@ -273,38 +273,39 @@ resource "aws_ecs_task_definition" "hammer" {
   ]
 }
 
-resource "null_resource" "hammer_task_run" {
-  # Run on every apply
-  triggers = {
-    always_run = timestamp()
-  }
-
-  provisioner "local-exec" {
-    command = <<EOF
-    aws ecs run-task \
-      --cluster="${aws_ecs_cluster.ecs_cluster.id}" \
-      --task-definition="${aws_ecs_task_definition.hammer.arn}" \
-      --count=1 \
-      --launch-type=FARGATE \
-      --network-configuration='{
-        "awsvpcConfiguration": {
-          "assignPublicIp": "ENABLED",
-          "subnets": ${jsonencode(data.aws_subnets.subnets.ids)}
-        }
-      }' > ${path.module}/hammer-exec-output.json
-EOF
-  }
-
-  depends_on = [
-    aws_ecs_task_definition.hammer
-  ]
-}
-
-data "local_file" "hammer_exec_output" {
-  filename = "${path.module}/hammer-exec-output.json"
-  depends_on  = [null_resource.hammer_task_run]
-}
-
-locals {
-  hammer_task_arn = jsondecode(data.local_file.hammer_exec_output.content).tasks[0].taskArn
-}
+#resource "null_resource" "hammer_task_run" {
+#  # Run on every apply
+#  triggers = {
+#    always_run = timestamp()
+#  }
+#
+#  provisioner "local-exec" {
+#    command = <<EOF
+#    aws ecs run-task \
+#      --cluster="${aws_ecs_cluster.ecs_cluster.id}" \
+#      --task-definition="${aws_ecs_task_definition.hammer.arn}" \
+#      --count=1 \
+#      --launch-type=FARGATE \
+#      --network-configuration='{
+#        "awsvpcConfiguration": {
+#          "assignPublicIp": "ENABLED",
+#          "subnets": ${jsonencode(data.aws_subnets.subnets.ids)}
+#        }
+#      }' > ${path.module}/hammer-exec-output.json
+#EOF
+#  }
+#
+#  depends_on = [
+#    aws_ecs_task_definition.hammer
+#  ]
+#}
+#
+#data "local_file" "hammer_exec_output" {
+#  filename = "${path.module}/hammer-exec-output.json"
+#  depends_on  = [null_resource.hammer_task_run]
+#}
+#
+#locals {
+#  hammer_task_arn = jsondecode(data.local_file.hammer_exec_output.content).tasks[0].taskArn
+#}
+#
