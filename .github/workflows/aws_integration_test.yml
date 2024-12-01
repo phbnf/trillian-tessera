@@ -103,7 +103,13 @@ jobs:
         id: hammer
         shell: bash
         run: |
-          export TASK_ARN=$(aws ecs run-task --cluster="$(echo ${{ steps.terraform.outputs.tf_actions_output }} | jq -r '.ecs_cluster')" --task-definition=hammer --count=1 --launch-type=FARGATE --network-configuration='{"awsvpcConfiguration": {"assignPublicIp":"ENABLED","subnets": '$(echo ${{ steps.terraform.outputs.tf_actions_output }} | jq -r ".vpc_subnets)"'}}' | jq -r ".tasks.[0].taskArn")
+          export TASK_ARN=$( \
+            aws ecs run-task \
+              --cluster="$(echo ${{ steps.terraform.outputs.tf_actions_output }} | jq -r '.ecs_cluster')")
+      #   --task-definition=hammer \
+      #   --count=1 --launch-type=FARGATE \
+      #   --network-configuration='{"awsvpcConfiguration": {"assignPublicIp":"ENABLED","subnets": '$(echo ${{ steps.terraform.outputs.tf_actions_output }} | jq -r ".vpc_subnets)"'}}' | \
+      # jq -r ".tasks.[0].taskArn")
 
       # TODO(phboneff): run conformance test on Fargate
 
