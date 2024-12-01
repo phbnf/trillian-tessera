@@ -23,4 +23,4 @@ remote_state {
   }
 }
 
-inputs = locals
+inputs = local
