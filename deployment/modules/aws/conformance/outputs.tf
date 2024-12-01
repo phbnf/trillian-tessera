@@ -9,5 +9,5 @@ output "ecs_cluster" {
 }
 
 output "hammer_arn" {
-  value = data.external.json.result.tasks
+  value = data.local_file.hammer_exec_output.content.tasks[0].taskArn
 }

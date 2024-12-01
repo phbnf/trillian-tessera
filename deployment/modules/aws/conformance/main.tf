@@ -274,6 +274,11 @@ resource "aws_ecs_task_definition" "hammer" {
 }
 
 resource "null_resource" "hammer_task_run" {
+  # Run on every apply
+  triggers = {
+    always_run = timestamp()
+  }
+
   provisioner "local-exec" {
     command = <<EOF
     aws ecs run-task \
@@ -286,7 +291,7 @@ resource "null_resource" "hammer_task_run" {
           "assignPublicIp": "ENABLED",
           "subnets": ${jsonencode(data.aws_subnets.subnets.ids)}
         }
-      }' 
+      }' >> ${path.module}/hammer-exec-output.json
 EOF
   }
 
@@ -295,7 +300,7 @@ EOF
   ]
 }
 
-data "external" "json" {
+data "local_file" "hammer_exec_output" {
+  filename = "${path.module}/hammer-exec-output.json"
   depends_on  = [null_resource.hammer_task_run]
-  program     = ["echo", "${null_resource.hammer_task_run}"]
 }
