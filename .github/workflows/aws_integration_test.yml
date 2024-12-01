@@ -103,7 +103,7 @@ jobs:
         id: hammer
         shell: bash
         run: |
-          aws ecs wait tasks-stopped --cluster="$(terragrunt output -raw ecs_cluster)" --tasks="$(terragrunt output -raw hammer_arn)"
+          aws ecs wait tasks-stopped --cluster="$(echo ${{ steps.terraform.outputs.tf_actions_output }} | jq -r '.ecs_cluster')" --tasks="$(terragrunt output -raw hammer_arn)"
 
       # TODO(phboneff): run conformance test on Fargate
 
