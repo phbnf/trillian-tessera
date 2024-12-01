@@ -100,17 +100,16 @@ jobs:
           tg_command: "apply"
         env:
           INPUT_POST_EXEC_1: |
-            export ECS_CLUSTER=$(terragrunt output -raw ecs_cluster)
+            terragrunt output -raw ecs_cluster > ${{ github.workspace	}}/ecs_cluster.txt
           INPUT_POST_EXEC_2: |
-            export VPC_SUBNETS=$(terragrunt output -json vpc_subnets)
+            terragrunt output -json vpc_subnets > ${{ github.workspace }}/vpc_subnets.json
 
       - name: Run Hammer
         id: hammer
         shell: bash
         run: |
-          echo $ECS_CLUSTER
-          echo "C KOI "
-          echo $VPC_SUBNETS
+          cat ${{ github.workspace	}}/ecs_cluster.txt
+          cat ${{ github.workspace	}}/vpc_subnets.json
    #       echo ${{ steps.terragrunt-apply.outputs.tg_action_output }}
    #       echo ${{ steps.terragrunt-apply.outputs.tg_actions_output }} | jq -r '.ecs_cluster'
    #       echo ${{ steps.terragrunt-apply.outputs.tg_actions_output }} | jq -r ".vpc_subnets"
