@@ -34,7 +34,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build, tag, and push Conformance container to Amazon ECR
-        id: build-publish
+        id: build-publish-conformance
         shell: bash
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -49,7 +49,7 @@ jobs:
           echo "full_image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
       - name: Build, tag, and push Hammer container to Amazon ECR
-        id: build-publish
+        id: build-publish-hammer
         shell: bash
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
