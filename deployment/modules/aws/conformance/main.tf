@@ -306,5 +306,5 @@ data "local_file" "hammer_exec_output" {
 }
 
 locals {
-  hammer_exec_output = jsonencode(data.local_file.hammer_exec_output.content)
+  hammer_exec_output = jsondecode(data.local_file.hammer_exec_output.content)
 }
