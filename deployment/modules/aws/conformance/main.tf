@@ -284,7 +284,7 @@ resource "null_resource" "hammer_task_run" {
       --network-configuration='{
         "awsvpcConfiguration": {
           "assignPublicIp": "ENABLED",
-          "subnets": ${data.aws_subnets.subnets.ids}
+          "subnets": ${jsonencode(data.aws_subnets.subnets.ids)}
         }
       }' 
 EOF
