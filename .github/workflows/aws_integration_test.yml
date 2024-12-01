@@ -75,7 +75,7 @@ jobs:
         uses: gruntwork-io/terragrunt-action@v2
         with:
           tf_version: ${{ env.TF_VERSION }}
-          tg_version: ${{ env.tg_version }}
+          tg_version: ${{ env.TG_VERSION }}
           tg_dir: ${{ env.TG_DIR }}
           tg_command: 'destroy'
 
