@@ -13,6 +13,12 @@ env:
   tg_version: "0.67.0"
   tg_dir: "deployment/live/aws/conformance/ci/"
 
+inputs:
+  aws_account_id:
+    description: 'AWS Account ID'
+    required: false
+    default: '869935063533'
+
 jobs:
   aws-integration:
     runs-on: ubuntu-latest
@@ -35,7 +41,7 @@ jobs:
         with:
           registries: ${{ inputs.aws_account_id }}
 
-      - name: Build, tag, and push image to Amazon ECR
+      - name: Build, tag, and push Conformance container to Amazon ECR
         id: build-publish
         shell: bash
         env:
@@ -49,6 +55,22 @@ jobs:
           echo "IMAGE $IMAGE_TAG is pushed to $ECR_REGISTRY/$ECR_REPOSITORY"
           echo "image_tag=$IMAGE_TAG" 
           echo "full_image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+      - name: Build, tag, and push Hammer container to Amazon ECR
+        id: build-publish
+        shell: bash
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          # TODO(phboneff): change this
+          ECR_REPOSITORY: transparency-dev/phbtest-hemmer
+          IMAGE_TAG: latest
+        run: |
+          docker build -f ./internal/hammer/Dockerfile . -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          echo "IMAGE $IMAGE_TAG is pushed to $ECR_REGISTRY/$ECR_REPOSITORY"
+          echo "image_tag=$IMAGE_TAG" 
+          echo "full_image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
 
       # TODO(phboneff): add a registry for the hammer
       # TODO(phboneff): AuroraDB take a long time to be brouht up and down
