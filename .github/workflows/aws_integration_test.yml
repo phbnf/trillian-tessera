@@ -108,10 +108,6 @@ jobs:
         id: hammer
         shell: bash
         run: |
-          echo $ECS_CLUSTER
-          echo $VPC_SUBNETS
-          echo ${{ steps.terragrunt-apply.outputs.ecs_cluster }} 
-          echo ${{ steps.terragrunt-apply.outputs.vpc_subnets }} 
           aws ecs run-task \
             --cluster="$ECS_CLUSTER" \
             --task-definition=hammer \
@@ -120,11 +116,13 @@ jobs:
             --network-configuration='{"awsvpcConfiguration": {"assignPublicIp":"ENABLED","subnets": '$VPC_SUBNETS'}}' \
             --query 'tasks[0].taskArn' \
           > ${{ github.workspace }}/hammer_arn.txt
-          cat ${{ github.workspace }}/hammer_arn.txt 
+          echo "Hammer task ARN: $(cat ${{ github.workspace }}/hammer_arn.txt)"
+          aws ecs wait tasks-stopped --cluster="$ECS_CLUSTER" --tasks=$(cat ${{ github.workspace }}/hammer_arn.txt)
+          aws ecs describe-tasks --cluster="$ECS_CLUSTER" --tasks=$(cat ${{ github.workspace }}/hammer_arn.txt) --query 'tasks[0].containers[0].exitCode'
+
         env:
           ECS_CLUSTER: ${{ steps.terragrunt-apply.outputs.ecs_cluster }} 
           VPC_SUBNETS: ${{ steps.terragrunt-apply.outputs.vpc_subnets }} 
-   #         jq -r ".tasks.[0].taskArn")
 
       # TODO(phboneff): run conformance test on Fargate
 
