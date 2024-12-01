@@ -90,14 +90,14 @@ jobs:
       #      --out_pub=${{ runner.temp }}/key.pub
       #    cat #{{ runner.temp }}/key.pub
 
-      #- name: Terragrunt apply
-      #  id: terragrunt-apply
-      #  uses: gruntwork-io/terragrunt-action@v2
-      #  with:
-      #    tf_version: ${{ env.TF_VERSION }}
-      #    tg_version: ${{ env.TG_VERSION }}
-      #    tg_dir: ${{ env.TG_DIR }}
-      #    tg_command: "apply"
+      - name: Terragrunt apply
+        id: terragrunt-apply
+        uses: gruntwork-io/terragrunt-action@v2
+        with:
+          tf_version: ${{ env.TF_VERSION }}
+          tg_version: ${{ env.TG_VERSION }}
+          tg_dir: ${{ env.TG_DIR }}
+          tg_command: "apply"
 
       - name: Run Hammer
         id: hammer
