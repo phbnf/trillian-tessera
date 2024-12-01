@@ -114,6 +114,10 @@ jobs:
           tg_dir: ${{ env.TG_DIR }}
           tg_command: "apply"
         env:
+          INPUT_PRE_EXEC_1: |
+            echo "TESSERA_SIGNER=$(cat ${{ runner.temp }}/key.sec)"
+          INPUT_PRE_EXEC_2: |
+            echo "TESSERA_VERIFIER=$(cat ${{ runner.temp }}/key.pub)"
           INPUT_POST_EXEC_1: |
             echo "ECS_CLUSTER=$(terragrunt output -raw ecs_cluster)" >> "$GITHUB_ENV"
           INPUT_POST_EXEC_2: |
@@ -126,7 +130,7 @@ jobs:
         shell: bash
         run: |
           cat ${{ runner.temp }}/key.pub
-          echo "Will launch a `hammer` ECS task."
+          echo "Will launch a hammer ECS task."
           HAMMER_ARN=$(aws ecs run-task \
             --cluster="$ECS_CLUSTER" \
             --task-definition=hammer \
