@@ -99,6 +99,20 @@ jobs:
           tg_dir: ${{ env.TG_DIR }}
           tg_command: "apply"
 
+      - name: Terragrunt output
+        id: terragrunt-output
+        uses: gruntwork-io/terragrunt-action@v2
+        with:
+          tf_version: ${{ env.TF_VERSION }}
+          tg_version: ${{ env.TG_VERSION }}
+          tg_dir: ${{ env.TG_DIR }}
+          tg_command: "output -raw "
+        env:
+          INPUT_POST_EXEC_1: |
+            echo "this is post exe!"
+          INPUT_POST_EXEC_2: |
+            terragrunt output -raw ecs_cluster
+
       - name: Run Hammer
         id: hammer
         shell: bash
