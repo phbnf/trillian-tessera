@@ -13,8 +13,6 @@ env:
   TG_VERSION: "0.67.0"
   TG_DIR: "deployment/live/aws/conformance/ci/"
   TESSERA_PREFIX_NAME: phboneff-dev
-  TESSERA_SIGNER: unused
-  TESSERA_VERIFIER: unused
   #TESSERA_SIGNER: PRIVATE+KEY+phboneff-dev-ci-conformance+3f5267c1+AbNthDVVl8SUoHuxMtSxGjHXi5R+CivYtyO7M2TPVSi6
   #TESSERA_VERIFIER: phboneff-dev-ci-conformance+3f5267c1+AatjnH2pMn2wRamVV1hywQI/+lHsV8ftCBroiCWyOUWQ
   ECR_REGISTRY: 869935063533.dkr.ecr.us-east-1.amazonaws.com
@@ -79,7 +77,10 @@ jobs:
           tf_version: ${{ env.TF_VERSION }}
           tg_version: ${{ env.TG_VERSION }}
           tg_dir: ${{ env.TG_DIR }}
-          tg_command: 'destroy'
+          tg_command: "destroy"
+        env:
+          TESSERA_SIGNER: unused
+          TESSERA_VERIFIER: unused
 
       ## Generate a new keys for the log to use, and export them to environment
       ## variables for Terragrunt to use.
@@ -118,7 +119,7 @@ jobs:
           INPUT_POST_EXEC_2: |
             echo "VPC_SUBNETS=$(terragrunt output -json vpc_subnets)" >> "$GITHUB_ENV"
 
-      ## How we can run the hammer using the task definition, against the 
+      ## How we can run the hammer using the task definition, against the
       ## conformance service. This step returns the hammer task's exit code.
       - name: Run Hammer
         id: hammer
@@ -146,4 +147,4 @@ jobs:
           tf_version: ${{ env.TF_VERSION }}
           tg_version: ${{ env.TG_VERSION }}
           tg_dir: ${{ env.TG_DIR }}
-          tg_command: 'destroy'
+          tg_command: "destroy"
