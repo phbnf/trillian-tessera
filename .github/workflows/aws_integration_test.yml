@@ -117,9 +117,10 @@ jobs:
             --query 'tasks[0].taskArn' \
           > ${{ github.workspace }}/hammer_arn.txt
           echo "Hammer task running, ARN: $(cat ${{ github.workspace }}/hammer_arn.txt)"
+          echo "Waiting for execution to be done..."
           aws ecs wait tasks-stopped --cluster="$ECS_CLUSTER" --tasks=[$(cat ${{ github.workspace }}/hammer_arn.txt)]
           aws ecs describe-tasks --cluster="$ECS_CLUSTER" --tasks=[$(cat ${{ github.workspace }}/hammer_arn.txt)] --query 'tasks[0].containers[0].exitCode' > ${{ github.workspace }}/exit_code.txt 
-          exit $(echo 1)"
+          exit $(echo 1)
 
         env:
           ECS_CLUSTER: ${{ steps.terragrunt-apply.outputs.ecs_cluster }} 
