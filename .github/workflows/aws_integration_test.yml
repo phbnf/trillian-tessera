@@ -40,33 +40,33 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag, and push Conformance image to Amazon ECR
-        id: build-publish-conformance
-        shell: bash
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY_CONFORMANCE }}
-          IMAGE_TAG: latest
-        run: |
-          docker build -f ./cmd/conformance/aws/Dockerfile . -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-          echo "IMAGE $IMAGE_TAG is pushed to $ECR_REGISTRY/$ECR_REPOSITORY"
-          echo "image_tag=$IMAGE_TAG" 
-          echo "full_image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+      #- name: Build, tag, and push Conformance image to Amazon ECR
+      #  id: build-publish-conformance
+      #  shell: bash
+      #  env:
+      #    ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+      #    ECR_REPOSITORY: ${{ env.ECR_REPOSITORY_CONFORMANCE }}
+      #    IMAGE_TAG: latest
+      #  run: |
+      #    docker build -f ./cmd/conformance/aws/Dockerfile . -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+      #    docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+      #    echo "IMAGE $IMAGE_TAG is pushed to $ECR_REGISTRY/$ECR_REPOSITORY"
+      #    echo "image_tag=$IMAGE_TAG" 
+      #    echo "full_image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
-      - name: Build, tag, and push Hammer image to Amazon ECR
-        id: build-publish-hammer
-        shell: bash
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY_HAMMER }}
-          IMAGE_TAG: latest
-        run: |
-          docker build -f ./internal/hammer/Dockerfile . -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-          echo "IMAGE $IMAGE_TAG is pushed to $ECR_REGISTRY/$ECR_REPOSITORY"
-          echo "image_tag=$IMAGE_TAG" 
-          echo "full_image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+      #- name: Build, tag, and push Hammer image to Amazon ECR
+      #  id: build-publish-hammer
+      #  shell: bash
+      #  env:
+      #    ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+      #    ECR_REPOSITORY: ${{ env.ECR_REPOSITORY_HAMMER }}
+      #    IMAGE_TAG: latest
+      #  run: |
+      #    docker build -f ./internal/hammer/Dockerfile . -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+      #    docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+      #    echo "IMAGE $IMAGE_TAG is pushed to $ECR_REGISTRY/$ECR_REPOSITORY"
+      #    echo "image_tag=$IMAGE_TAG" 
+      #    echo "full_image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
 
       # TODO(phboneff): AuroraDB take a long time to be brouht up and down
@@ -80,30 +80,29 @@ jobs:
       #    tg_dir: ${{ env.TG_DIR }}
       #    tg_command: 'destroy'
 
-      - name: Generate Tessera keys
-        id: generate-keys
-        shell: bash
-        run: |
-          go run github.com/transparency-dev/serverless-log/cmd/generate_keys@80334bc9dc573e8f6c5b3694efad6358da50abd4 \
-            --key_name=tessera/test/conformance \
-            --out_priv=${{ runner.temp }}/key.sec \
-            --out_pub=${{ runner.temp }}/key.pub
-          cat #{{ runner.temp }}/key.pub
+      #- name: Generate Tessera keys
+      #  id: generate-keys
+      #  shell: bash
+      #  run: |
+      #    go run github.com/transparency-dev/serverless-log/cmd/generate_keys@80334bc9dc573e8f6c5b3694efad6358da50abd4 \
+      #      --key_name=tessera/test/conformance \
+      #      --out_priv=${{ runner.temp }}/key.sec \
+      #      --out_pub=${{ runner.temp }}/key.pub
+      #    cat #{{ runner.temp }}/key.pub
 
-      - name: Terragrunt apply
-        id: terragrunt-apply
-        uses: gruntwork-io/terragrunt-action@v2
-        with:
-          tf_version: ${{ env.TF_VERSION }}
-          tg_version: ${{ env.TG_VERSION }}
-          tg_dir: ${{ env.TG_DIR }}
-          tg_command: "apply"
+      #- name: Terragrunt apply
+      #  id: terragrunt-apply
+      #  uses: gruntwork-io/terragrunt-action@v2
+      #  with:
+      #    tf_version: ${{ env.TF_VERSION }}
+      #    tg_version: ${{ env.TG_VERSION }}
+      #    tg_dir: ${{ env.TG_DIR }}
+      #    tg_command: "apply"
 
       - name: Run Hammer
         id: hammer
         shell: bash
         run: |
-          apt-get install jq
           export TASK_ARN=$(aws ecs run-task \
             --cluster="$(echo ${{ steps.terraform.outputs.tf_actions_output }} | jq -r '.ecs_cluster')" \
             --task-definition=hammer \
