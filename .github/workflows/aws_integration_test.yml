@@ -102,7 +102,7 @@ jobs:
           INPUT_POST_EXEC_1: |
             export ECS_CLUSTER=$(terragrunt output -raw ecs_cluster)
           INPUT_POST_EXEC_2: |
-            export VPC_SUBNETS=$(terragrunt output -raw .vpc_subnets)
+            export VPC_SUBNETS=$(terragrunt output -raw vpc_subnets)
 
       - name: Run Hammer
         id: hammer
@@ -110,17 +110,17 @@ jobs:
         run: |
           echo $ECS_CLUSTER
           echo $VPC_SUBNETS
-          echo ${{ steps.terragrunt-apply.outputs.tg_action_output }}
-          echo ${{ steps.terragrunt-apply.outputs.tg_actions_output }} | jq -r '.ecs_cluster'
-          echo ${{ steps.terragrunt-apply.outputs.tg_actions_output }} | jq -r ".vpc_subnets"
-          TASK_ARN=$( \
-            aws ecs run-task \
-              --cluster="$(echo ${{ steps.terraform.outputs.tf_actions_output }} | jq -r '.ecs_cluster')" \
-              --task-definition=hammer \
-              --count=1 \
-              --launch-type=FARGATE \
-              --network-configuration='{"awsvpcConfiguration": {"assignPublicIp":"ENABLED","subnets": '$(echo ${{ steps.terraform.outputs.tf_actions_output }} | jq -r ".vpc_subnets")'}}' | \
-            jq -r ".tasks.[0].taskArn")
+   #       echo ${{ steps.terragrunt-apply.outputs.tg_action_output }}
+   #       echo ${{ steps.terragrunt-apply.outputs.tg_actions_output }} | jq -r '.ecs_cluster'
+   #       echo ${{ steps.terragrunt-apply.outputs.tg_actions_output }} | jq -r ".vpc_subnets"
+   #       TASK_ARN=$( \
+   #         aws ecs run-task \
+   #           --cluster="$(echo ${{ steps.terraform.outputs.tf_actions_output }} | jq -r '.ecs_cluster')" \
+   #           --task-definition=hammer \
+   #           --count=1 \
+   #           --launch-type=FARGATE \
+   #           --network-configuration='{"awsvpcConfiguration": {"assignPublicIp":"ENABLED","subnets": '$(echo ${{ steps.terraform.outputs.tf_actions_output }} | jq -r ".vpc_subnets")'}}' | \
+   #         jq -r ".tasks.[0].taskArn")
 
       # TODO(phboneff): run conformance test on Fargate
 
