@@ -117,7 +117,7 @@ jobs:
             --task-definition=hammer \
             --count=1 \
             --launch-type=FARGATE \
-            --network-configuration='{"awsvpcConfiguration": {"assignPublicIp":"ENABLED","subnets": $VPC_SUBNETS}}' \
+            --network-configuration='{"awsvpcConfiguration": {"assignPublicIp":"ENABLED","subnets": '$VPC_SUBNETS'}}' \
             --query 'tasks[0].taskArn' \
           > ${{ github.workspace }}/hammer_arn.txt
           cat ${{ github.workspace }}/hammer_arn.txt 
