@@ -109,6 +109,7 @@ jobs:
         shell: bash
         run: |
           echo $ECS_CLUSTER
+          echo "C KOI "
           echo $VPC_SUBNETS
    #       echo ${{ steps.terragrunt-apply.outputs.tg_action_output }}
    #       echo ${{ steps.terragrunt-apply.outputs.tg_actions_output }} | jq -r '.ecs_cluster'
