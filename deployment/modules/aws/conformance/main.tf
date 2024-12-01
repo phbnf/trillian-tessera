@@ -277,10 +277,10 @@ resource "null_resource" "hammer_task_run" {
   provisioner "local-exec" {
     command = <<EOF
     aws ecs run-task \
-      --cluster=${aws_ecs_cluster.ecs_cluster.id}
-      --task-definition=${aws_ecs_task_definition.hammer.arn}
-      --count=1
-      --launch-type=FARGATE
+      --cluster="${aws_ecs_cluster.ecs_cluster.id}" \
+      --task-definition="${aws_ecs_task_definition.hammer.arn}" \
+      --count=1 \
+      --launch-type=FARGATE \
       --network-configuration='{
         "awsvpcConfiguration": {
           "assignPublicIp": "ENABLED",
