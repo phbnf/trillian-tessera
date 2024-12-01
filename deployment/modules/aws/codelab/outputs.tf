@@ -1,6 +1,6 @@
-output "log_bucket" {
-  description = "Log S3 bucket endpoint"
-  value       = module.storage.log_bucket.bucket_regional_domain_name
+output "log_bucket_id" {
+  description = "Log S3 bucket name"
+  value       = module.storage.log_bucket.id
 }
 
 output "log_rds_db" {
