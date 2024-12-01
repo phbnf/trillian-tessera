@@ -4,12 +4,12 @@ variable "prefix_name" {
 }
 
 variable "base_name" {
-  description = "Common name to use when naming resources"
+  description = "Common name to use when naming resources."
   type        = string
 }
 
 variable "region" {
-  description = "Region in which to create resources"
+  description = "Region in which to create resources."
   type        = string
 }
 
@@ -34,11 +34,16 @@ variable "ecr_repository_hammer" {
 }
 
 variable "signer" {
-  description = "The note signer which used to sign checkpoints"
+  description = "The note signer which used to sign checkpoints."
   type        = string
 }
 
 variable "verifier" {
-  description = "The note verifier used to verify checkpoints"
+  description = "The note verifier used to verify checkpoints."
+  type        = string
+}
+
+variable "ecs_role" {
+  description = "Role used to run the ECS containers and task."
   type        = string
 }

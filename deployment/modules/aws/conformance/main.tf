@@ -136,9 +136,8 @@ resource "aws_ecs_task_definition" "conformance" {
   network_mode             = "awsvpc"
   cpu                      = 1024
   memory                   = 2048
-  # TODO(phboneff): change this
-  task_role_arn            = "arn:aws:iam::869935063533:role/ecsTaskExecutionRole"
-  execution_role_arn       = "arn:aws:iam::869935063533:role/ecsTaskExecutionRole"
+  task_role_arn            = var.ecs_role
+  execution_role_arn       = var.ecs_role
   container_definitions    = jsonencode([{
     "name": "${local.name}-conformance",
     "image": "${var.ecr_registry}/${var.ecr_repository_conformance}",
@@ -187,12 +186,13 @@ resource "aws_ecs_service" "conformance_service" {
   cluster               = aws_ecs_cluster.ecs_cluster.arn
   launch_type           = "FARGATE"
   desired_count         = 3
-  force_new_deployment  = true
   wait_for_steady_state = true
   # redeploy on every apply
-  triggers = {
-    redeployment = plantimestamp()
-  }
+  # TODO(phboneff): decide whether we need this
+  # force_new_deployment  = true
+  # triggers = {
+  #   redeployment = plantimestamp()
+  # }
 
   network_configuration {
     subnets = data.aws_subnets.subnets.ids
@@ -229,9 +229,8 @@ resource "aws_ecs_task_definition" "hammer" {
   network_mode             = "awsvpc"
   cpu                      = 1024
   memory                   = 2048
-  # TODO(phboneff): change this
-  task_role_arn            = "arn:aws:iam::869935063533:role/ecsTaskExecutionRole"
-  execution_role_arn       = "arn:aws:iam::869935063533:role/ecsTaskExecutionRole"
+  task_role_arn            = var.ecs_role
+  execution_role_arn       = var.ecs_role
   container_definitions = jsonencode([{
     "name": "${local.name}-hammer",
     "image": "${var.ecr_registry}/${var.ecr_repository_hammer}",

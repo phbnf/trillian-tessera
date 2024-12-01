@@ -14,6 +14,8 @@ locals {
   ecr_repository_hammer      = get_env("ECR_REPOSITORY_HAMMER", "trillian-tessera/hammer:latest")
   signer                     = get_env("TESSERA_SIGNER")
   verifier                   = get_env("TESSERA_VERIFIER")
+  # Roles are defined externally
+  ecs_role                   = "arn:aws:iam::${local.account_id}:role/ecsTaskExecutionRole"
   ephemeral                  = true
 }
 
