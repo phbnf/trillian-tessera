@@ -102,13 +102,14 @@ jobs:
           INPUT_POST_EXEC_1: |
             echo "ecs_cluster=$(terragrunt output -raw ecs_cluster)" >> "$GITHUB_OUTPUT"
           INPUT_POST_EXEC_2: |
-            terragrunt output -json vpc_subnets > /github/workspace/vpc_subnets.json
+            echo "vpc_subnets=$(terragrunt output -json vpc_subnets)" > "$GITHUB_OUTPUT"
 
       - name: Run Hammer
         id: hammer
         shell: bash
         run: |
           echo ${{ steps.terragrunt-apply.outputs.ecs_cluster }}
+          echo ${{ steps.terragrunt-apply.outputs.vpc_subnets }}
    #       echo ${{ steps.terragrunt-apply.outputs.tg_action_output }}
    #       echo ${{ steps.terragrunt-apply.outputs.tg_actions_output }} | jq -r '.ecs_cluster'
    #       echo ${{ steps.terragrunt-apply.outputs.tg_actions_output }} | jq -r ".vpc_subnets"
