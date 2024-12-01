@@ -103,8 +103,8 @@ jobs:
         id: hammer
         shell: bash
         run: |
-          echo ${{ steps.terraform.outputs.tf_actions_output }} | jq -r '.ecs_cluster')
-          echo ${{ steps.terraform.outputs.tf_actions_output }} | jq -r ".vpc_subnets")
+          echo ${{ steps.terraform.outputs.tf_actions_output }} | jq -r '.ecs_cluster'
+          echo ${{ steps.terraform.outputs.tf_actions_output }} | jq -r ".vpc_subnets"
           TASK_ARN=$( \
             aws ecs run-task \
               --cluster="$(echo ${{ steps.terraform.outputs.tf_actions_output }} | jq -r '.ecs_cluster')" \
