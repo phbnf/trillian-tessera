@@ -54,7 +54,7 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           # TODO(phboneff): change this
-          ECR_REPOSITORY: transparency-dev/phbtest-hemmer
+          ECR_REPOSITORY: transparency-dev/phbtest-hammer
           IMAGE_TAG: latest
         run: |
           docker build -f ./internal/hammer/Dockerfile . -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
