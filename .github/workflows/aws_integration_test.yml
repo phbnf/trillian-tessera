@@ -25,6 +25,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      ## Authenticate to AWS with the credentials stored in Github Secrets.
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -36,10 +37,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
+      ## Authenticate with ECR to push the conformance and hammer images.
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      ## Build the conformance image and push it to ECR. This will be used
+      ## later on by Terragrunt.
       - name: Build, tag, and push Conformance image to Amazon ECR
         id: build-publish-conformance
         shell: bash
@@ -54,6 +58,8 @@ jobs:
           echo "image_tag=$IMAGE_TAG" 
           echo "full_image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
+      ## Build the hammer image and push it to ECR. This will be used
+      ## later on by Terragrunt.
       - name: Build, tag, and push Hammer image to Amazon ECR
         id: build-publish-hammer
         shell: bash
@@ -68,9 +74,10 @@ jobs:
           echo "image_tag=$IMAGE_TAG" 
           echo "full_image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
-
+      ## Destroy any pre-existing deployment/live/aws/conformance/ci env.
+      ## This might happen if a previous integration test workflow has failed.
       # TODO(phboneff): AuroraDB take a long time to be brouht up and down
-      #   consider keeping it around between tests / using Aurora Serveless
+      #  consider keeping it around between tests / using Aurora Serveless
       #- name: Terragrunt destroy pre conformance test
       #  id: terragrunt-destroy-pre
       #  uses: gruntwork-io/terragrunt-action@v2
@@ -80,16 +87,24 @@ jobs:
       #    tg_dir: ${{ env.TG_DIR }}
       #    tg_command: 'destroy'
 
-      #- name: Generate Tessera keys
-      #  id: generate-keys
-      #  shell: bash
-      #  run: |
-      #    go run github.com/transparency-dev/serverless-log/cmd/generate_keys@80334bc9dc573e8f6c5b3694efad6358da50abd4 \
-      #      --key_name=tessera/test/conformance \
-      #      --out_priv=${{ runner.temp }}/key.sec \
-      #      --out_pub=${{ runner.temp }}/key.pub
-      #    cat #{{ runner.temp }}/key.pub
+      ## Generate a new keys for the log to use.
+      - name: Generate Tessera keys
+        id: generate-keys
+        shell: bash
+        run: |
+          go run github.com/transparency-dev/serverless-log/cmd/generate_keys@80334bc9dc573e8f6c5b3694efad6358da50abd4 \
+            --key_name=tessera/test/conformance \
+            --out_priv=${{ runner.temp }}/key.sec \
+            --out_pub=${{ runner.temp }}/key.pub
+          cat ${{ runner.temp }}/key.pub
 
+      ## Apply the deployment/live/aws/conformance/ci terragrunt config.
+      ## This will bring up the conformance infrastructure whitch consists of:
+      ##   - the storage module
+      ##   - a private S3 <--> ECS network link for the hammer to read the log
+      ##   - an ECS cluster to run Fargate tasks
+      ##   - a conformance service, with multiple conformance binary instances
+      ##   - a hammer task definition (but no execution)
       - name: Terragrunt apply
         id: terragrunt-apply
         uses: gruntwork-io/terragrunt-action@v2
@@ -104,10 +119,13 @@ jobs:
           INPUT_POST_EXEC_2: |
             echo "VPC_SUBNETS=$(terragrunt output -json vpc_subnets)" >> "$GITHUB_ENV"
 
+      ## How we can run the hammer using the task definition, against the 
+      ## conformance service. This step returns the hammer task's exit code.
       - name: Run Hammer
         id: hammer
         shell: bash
         run: |
+          cat ${{ runner.temp }}/key.pub
           echo "Will launch a `hammer` ECS task."
           HAMMER_ARN=$(aws ecs run-task \
             --cluster="$ECS_CLUSTER" \
@@ -121,20 +139,6 @@ jobs:
           aws ecs wait tasks-stopped --cluster="$ECS_CLUSTER" --tasks=[$HAMMER_ARN]
           echo "The task has stopped. Fetching exit code and returning this action with it."
           exit $(aws ecs describe-tasks --cluster="$ECS_CLUSTER" --tasks=[$HAMMER_ARN] --query 'tasks[0].containers[0].exitCode')
-
-#          echo "Hammer task running, ARN: $(cat ${{ github.workspace }}/hammer_arn.txt)"
-#          echo "Waiting for execution to be done..."
-#          aws ecs wait tasks-stopped --cluster="$ECS_CLUSTER" --tasks=[$(cat ${{ github.workspace }}/hammer_arn.txt)]
-#          echo "Execution done, fetching exit code and returning it"
-#          aws ecs describe-tasks --cluster="$ECS_CLUSTER" --tasks=[$(cat ${{ github.workspace }}/hammer_arn.txt)] --query 'tasks[0].containers[0].exitCode' > ${{ github.workspace }}/exit_code.txt 
-#          exit $(cat ${{ github.workspace }}/exit_code.txt)
-#          > ${{ github.workspace }}/hammer_arn.txt
-
-#        env:
-#          ECS_CLUSTER: ${{ steps.terragrunt-apply.outputs.ecs_cluster }} 
-#          VPC_SUBNETS: ${{ steps.terragrunt-apply.outputs.vpc_subnets }} 
-
-      # TODO(phboneff): run conformance test on Fargate
 
       #- name: Terragrunt destroy post conformance test
       #  id: terragrunt-destroy-post
