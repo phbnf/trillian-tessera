@@ -103,7 +103,7 @@ jobs:
         id: hammer
         shell: bash
         run: |
-          echo ${{ steps.terragrun-apply.outputs }}
+          echo ${{ steps.terragrunt-apply.outputs }}
           echo ${{ steps.terragrunt-apply.outputs.tg_actions_output }} | jq -r '.ecs_cluster'
           echo ${{ steps.terragrunt-apply.outputs.tg_actions_output }} | jq -r ".vpc_subnets"
           TASK_ARN=$( \
