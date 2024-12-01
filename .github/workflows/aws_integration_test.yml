@@ -13,12 +13,6 @@ env:
   tg_version: "0.67.0"
   tg_dir: "deployment/live/aws/conformance/ci/"
 
-inputs:
-  aws_account_id:
-    description: 'AWS Account ID'
-    required: false
-    default: '869935063533'
-
 jobs:
   aws-integration:
     runs-on: ubuntu-latest
@@ -38,8 +32,6 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
-        with:
-          registries: ${{ inputs.aws_account_id }}
 
       - name: Build, tag, and push Conformance container to Amazon ECR
         id: build-publish
