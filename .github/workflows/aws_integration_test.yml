@@ -9,15 +9,16 @@ permissions:
   contents: read
 
 env:
-  tf_version: "1.10.0"
-  tg_version: "0.67.0"
-  tg_dir: "deployment/live/aws/conformance/ci/"
+  TF_VERSION: "1.10.0"
+  TG_VERSION: "0.67.0"
+  TG_DIR: "deployment/live/aws/conformance/ci/"
   TESSERA_PREFIX_NAME: phboneff-dev
   TESSERA_SIGNER: PRIVATE+KEY+phboneff-dev-ci-conformance+3f5267c1+AbNthDVVl8SUoHuxMtSxGjHXi5R+CivYtyO7M2TPVSi6
   TESSERA_VERIFIER: phboneff-dev-ci-conformance+3f5267c1+AatjnH2pMn2wRamVV1hywQI/+lHsV8ftCBroiCWyOUWQ
   ECR_REGISTRY: 869935063533.dkr.ecr.us-east-1.amazonaws.com
-  ECR_REPOSITORY_CONFORMANCE: transparency-dev/phbtest-trillian-tessera:latest
-  ECR_REPOSITORY_HAMMER: transparency-dev/phbtest-hammer:latest
+  ECR_REPOSITORY_CONFORMANCE: transparency-dev/phbtest-trillian-tessera
+  ECR_REPOSITORY_HAMMER: transparency-dev/phbtest-hammer
+  AWS_REGION: us-east-1
 
 jobs:
   aws-integration:
@@ -30,7 +31,7 @@ jobs:
           # TODO(phboneff): use a better form of authentication
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -39,13 +40,12 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag, and push Conformance container to Amazon ECR
+      - name: Build, tag, and push Conformance image to Amazon ECR
         id: build-publish-conformance
         shell: bash
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          # TODO(phboneff): change this
-          ECR_REPOSITORY: transparency-dev/phbtest-trillian-tessera
+          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY_CONFORMANCE }}
           IMAGE_TAG: latest
         run: |
           docker build -f ./cmd/conformance/aws/Dockerfile . -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
@@ -54,13 +54,12 @@ jobs:
           echo "image_tag=$IMAGE_TAG" 
           echo "full_image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
-      - name: Build, tag, and push Hammer container to Amazon ECR
+      - name: Build, tag, and push Hammer image to Amazon ECR
         id: build-publish-hammer
         shell: bash
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          # TODO(phboneff): change this
-          ECR_REPOSITORY: transparency-dev/phbtest-hammer
+          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY_HAMMER }}
           IMAGE_TAG: latest
         run: |
           docker build -f ./internal/hammer/Dockerfile . -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
@@ -70,54 +69,51 @@ jobs:
           echo "full_image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
 
-      # TODO(phboneff): add a registry for the hammer
       # TODO(phboneff): AuroraDB take a long time to be brouht up and down
       #   consider keeping it around between tests / using Aurora Serveless
-      #- name: Terragrunt destroy pre test
-      #  id: terragrunt-destroy
+      #- name: Terragrunt destroy pre conformance test
+      #  id: terragrunt-destroy-pre
       #  uses: gruntwork-io/terragrunt-action@v2
-      #  env:
-      #    # TODO(phboneff): remove this
-      #    TESSERA_PREFIX_NAME: phboneff-dev
       #  with:
-      #    tf_version: ${{ env.tf_version }}
+      #    tf_version: ${{ env.TF_VERSION }}
       #    tg_version: ${{ env.tg_version }}
-      #    tg_dir: ${{ env.tg_dir }}
+      #    tg_dir: ${{ env.TG_DIR }}
       #    tg_command: 'destroy'
+
       - name: Generate Tessera keys
         id: generate-keys
         shell: bash
-        # TODO(phboneff): replace with prober go
         run: |
           go run github.com/transparency-dev/serverless-log/cmd/generate_keys@80334bc9dc573e8f6c5b3694efad6358da50abd4 \
             --key_name=tessera/test/conformance \
             --out_priv=${{ runner.temp }}/key.sec \
             --out_pub=${{ runner.temp }}/key.pub
           cat #{{ runner.temp }}/key.pub
-        #uses: actions/checkout@v4
-        #with:
-        #  repository: transparency-dev/serverless-log
-        #  path: serverless-log/cmd/generate_keys
-        #uses: actions/setup-go@v5
-        #with:
-        #  go-version: '^1.13.1'
-        #run: |
 
       - name: Terragrunt apply
         id: terragrunt-apply
         uses: gruntwork-io/terragrunt-action@v2
-        # env:
-          # TODO(phboneff): remove this
         with:
-          tf_version: ${{ env.tf_version }}
-          tg_version: ${{ env.tg_version }}
-          tg_dir: ${{ env.tg_dir }}
+          tf_version: ${{ env.TF_VERSION }}
+          tg_version: ${{ env.TG_VERSION }}
+          tg_dir: ${{ env.TG_DIR }}
           tg_command: "apply"
+
+      - name: Run Hammer
+        id: hammer
+        shell: bash
+        run: |
+          apt-get install jq
+          export TASK_ARN=$(aws ecs run-task \
+            --cluster="$(echo ${{ steps.terraform.outputs.tf_actions_output }} | jq -r '.ecs_cluster')" \
+            --task-definition=hammer \
+            --count=1 --launch-type=FARGATE \
+            --network-configuration='{"awsvpcConfiguration": {"assignPublicIp":"ENABLED","subnets": '$(echo ${{ steps.terraform.outputs.tf_actions_output }} | jq -r ".vpc_subnets)"}}' | jq -r ".tasks.[0].taskArn")
 
       # TODO(phboneff): run conformance test on Fargate
 
-      #- name: Terragrunt destroy post test
-      #  id: terragrunt-destroy
+      #- name: Terragrunt destroy post conformance test
+      #  id: terragrunt-destroy-post
       #  uses: gruntwork-io/terragrunt-action@v2
       #  env:
       #    # TODO(phboneff): remove this
