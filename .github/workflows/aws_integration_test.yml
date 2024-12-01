@@ -100,7 +100,7 @@ jobs:
           tg_command: "apply"
         env:
           INPUT_POST_EXEC_1: |
-            echo "ecs_cluster=$(terragrunt output -raw ecs_cluster) >> "$GITHUB_OUTPUT"
+            echo "ecs_cluster=$(terragrunt output -raw ecs_cluster)" >> "$GITHUB_OUTPUT"
           INPUT_POST_EXEC_2: |
             terragrunt output -json vpc_subnets > /github/workspace/vpc_subnets.json
 
