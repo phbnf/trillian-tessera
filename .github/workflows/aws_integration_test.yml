@@ -98,25 +98,18 @@ jobs:
           tg_version: ${{ env.TG_VERSION }}
           tg_dir: ${{ env.TG_DIR }}
           tg_command: "apply"
-
-      - name: Terragrunt output
-        id: terragrunt-output
-        uses: gruntwork-io/terragrunt-action@v2
-        with:
-          tf_version: ${{ env.TF_VERSION }}
-          tg_version: ${{ env.TG_VERSION }}
-          tg_dir: ${{ env.TG_DIR }}
-          tg_command: "output -raw "
         env:
           INPUT_POST_EXEC_1: |
-            echo "this is post exe!"
+            export ECS_CLUSTER=$(terragrunt output -raw ecs_cluster)
           INPUT_POST_EXEC_2: |
-            terragrunt output -raw ecs_cluster
+            export VPC_SUBNETS=$(terragrunt output -raw .vpc_subnets)
 
       - name: Run Hammer
         id: hammer
         shell: bash
         run: |
+          echo $ECS_CLUSTER
+          echo $VPC_SUBNETS
           echo ${{ steps.terragrunt-apply.outputs.tg_action_output }}
           echo ${{ steps.terragrunt-apply.outputs.tg_actions_output }} | jq -r '.ecs_cluster'
           echo ${{ steps.terragrunt-apply.outputs.tg_actions_output }} | jq -r ".vpc_subnets"
