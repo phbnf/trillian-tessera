@@ -77,6 +77,3 @@ data "aws_iam_policy_document" "allow_access_from_vpce" {
   }
   depends_on = [aws_vpc_endpoint.s3]
 }
-
-## Connect VM to RDS database #################################################
-// TODO, create security groups
