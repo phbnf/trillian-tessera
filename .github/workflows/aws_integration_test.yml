@@ -2,8 +2,9 @@ name: AWS Conformance Test
 
 on:
   push:
+    # TODO(phboneff): change this to main when I submit
     branches:
-      - actionbuild
+      - awsconformance
 
 permissions:
   contents: read
@@ -12,9 +13,8 @@ env:
   TF_VERSION: "1.10.0"
   TG_VERSION: "0.67.0"
   TG_DIR: "deployment/live/aws/conformance/ci/"
+  # TODO(phboneff): change these values when I submit
   TESSERA_PREFIX_NAME: phboneff-dev
-  #TESSERA_SIGNER: PRIVATE+KEY+phboneff-dev-ci-conformance+3f5267c1+AbNthDVVl8SUoHuxMtSxGjHXi5R+CivYtyO7M2TPVSi6
-  #TESSERA_VERIFIER: phboneff-dev-ci-conformance+3f5267c1+AatjnH2pMn2wRamVV1hywQI/+lHsV8ftCBroiCWyOUWQ
   ECR_REGISTRY: 869935063533.dkr.ecr.us-east-1.amazonaws.com
   ECR_REPOSITORY_CONFORMANCE: transparency-dev/phbtest-trillian-tessera:latest
   ECR_REPOSITORY_HAMMER: transparency-dev/phbtest-hammer:latest

@@ -1,16 +1,3 @@
-# TODO(phboneff): clean:
-#terraform {
-#  backend "s3" {}
-#  required_providers {
-#    aws = {
-#      source = "hashicorp/aws"
-#      version = "5.76.0"
-#    }
-#  }
-#}
-
-data "aws_caller_identity" "current" {}
-
 locals {
   name = "${var.prefix_name}-${var.base_name}"
 }
