@@ -1,0 +1,43 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "route53:AssociateVPCWithHostedZone",
+                "route53:CreateHostedZone",
+                "servicediscovery:CreatePrivateDnsNamespace",
+                "servicediscovery:GetOperation",
+                "servicediscovery:ListTagsForResource"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "servicediscovery:CreateService",
+                "servicediscovery:DeleteNamespace",
+                "servicediscovery:GetNamespace"
+            ],
+            "Resource": "arn:aws:servicediscovery:us-east-1:864981736166:namespace/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "servicediscovery:CreateService",
+                "servicediscovery:DeleteService",
+                "servicediscovery:GetService"
+            ],
+            "Resource": "arn:aws:servicediscovery:us-east-1:864981736166:service/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "route53:ChangeResourceRecordSets",
+                "route53:DeleteHostedZone",
+                "route53:ListResourceRecordSets"
+            ],
+            "Resource": "arn:aws:route53:::hostedzone/*"
+        }
+    ]
+}

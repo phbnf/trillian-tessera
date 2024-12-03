@@ -1,0 +1,81 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "rds:AddTagsToResource"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "rds:CreateDBClusterSnapshot",
+                "rds:DeleteDBCluster"
+            ],
+            "Resource": "arn:aws:rds:us-east-1:864981736166:cluster-snapshot:*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "rds:CreateDBCluster",
+            "Resource": "arn:aws:rds:us-east-1:864981736166:cluster-pg:*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "rds:CreateDBCluster",
+                "rds:CreateDBClusterSnapshot",
+                "rds:DeleteDBCluster",
+                "rds:DescribeDBClusters",
+                "rds:CreateDBInstance"
+            ],
+            "Resource": "arn:aws:rds:us-east-1:864981736166:cluster:*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "rds:CreateDBInstance",
+                "rds:CreateDBSnapshot",
+                "rds:CreateTenantDatabase",
+                "rds:DeleteDBInstance",
+                "rds:DeleteTenantDatabase",
+                "rds:DescribeDBInstances"
+            ],
+            "Resource": "arn:aws:rds:us-east-1:864981736166:db:*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "rds:CreateDBCluster",
+            "Resource": "arn:aws:rds:us-east-1:864981736166:og:*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "rds:CreateDBSnapshot",
+            "Resource": "arn:aws:rds:us-east-1:864981736166:snapshot-tenant-database:*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "rds:CreateDBSnapshot",
+            "Resource": "arn:aws:rds:us-east-1:864981736166:snapshot:*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "rds:CreateDBCluster",
+            "Resource": "arn:aws:rds:us-east-1:864981736166:subgrp:*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "rds:CreateTenantDatabase",
+                "rds:DeleteTenantDatabase"
+            ],
+            "Resource": "arn:aws:rds:us-east-1:864981736166:tenant-database:*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "rds:DescribeGlobalClusters",
+            "Resource": "arn:aws:rds::864981736166:global-cluster:*"
+        }
+    ]
+}

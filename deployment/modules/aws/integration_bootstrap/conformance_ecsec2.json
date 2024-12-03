@@ -1,0 +1,98 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:CreateTags",
+                "ec2:DescribeNetworkAcls",
+                "ec2:DescribePrefixLists",
+                "ec2:DescribeRegions",
+                "ec2:DescribeRouteTables",
+                "ec2:DescribeSecurityGroups",
+                "ec2:DescribeSubnets",
+                "ec2:DescribeVpcEndpoints",
+                "ec2:DescribeVpcs",
+                "ecs:DeregisterTaskDefinition",
+                "ecs:DescribeTaskDefinition",
+                "ecs:RegisterTaskDefinition",
+                "ecs:CreateCluster"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ecs:DescribeClusters",
+                "ecs:DeleteCluster",
+                "ecs:PutClusterCapacityProviders"
+            ],
+            "Resource": "arn:aws:ecs:us-east-1:864981736166:cluster/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ecs:CreateService",
+                "ecs:DeleteService",
+                "ecs:DescribeServices",
+                "ecs:UpdateService"
+            ],
+            "Resource": "arn:aws:ecs:us-east-1:864981736166:service/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "ecs:DescribeTasks",
+            "Resource": "arn:aws:ecs:us-east-1:864981736166:task/*/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "ecs:ListTasks",
+            "Resource": "arn:aws:ecs:us-east-1:864981736166:container-instance/*/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "ecs:RunTask",
+            "Resource": "arn:aws:ecs:us-east-1:864981736166:task-definition/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:CreateVpcEndpoint",
+                "ec2:DeleteVpcEndpoints",
+                "ec2:ModifyVpcEndpoint"
+            ],
+            "Resource": "arn:aws:ec2:us-east-1:864981736166:vpc-endpoint/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:DescribeVpcAttribute",
+                "ec2:CreateVpcEndpoint"
+            ],
+            "Resource": "arn:aws:ec2:us-east-1:864981736166:vpc/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "ec2:ModifyVpcEndpoint",
+            "Resource": "arn:aws:ec2:us-east-1:864981736166:route-table/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "servicediscovery:CreateService",
+                "servicediscovery:DeleteNamespace",
+                "servicediscovery:GetNamespace"
+            ],
+            "Resource": "arn:aws:servicediscovery:us-east-1:864981736166:namespace/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "servicediscovery:CreateService",
+                "servicediscovery:DeleteService",
+                "servicediscovery:GetService"
+            ],
+            "Resource": "arn:aws:servicediscovery:us-east-1:864981736166:service/*"
+        }
+    ]
+}
