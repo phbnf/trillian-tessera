@@ -3,7 +3,7 @@ name: AWS Conformance Test
 on:
   push:
     branches:
-    - main
+    - integration-p
 
 # This prevents two workflows from running at the same time.
 # This workflows calls terragrunt, which does not allow concurrent runs.
@@ -18,8 +18,8 @@ env:
   TF_VERSION: "1.9.8"
   TG_VERSION: "0.67.0"
   TG_DIR: "deployment/live/aws/conformance/ci/"
-  TESSERA_PREFIX_NAME: trillian-tessera
-  ECR_REGISTRY: 864981736166.dkr.ecr.us-east-1.amazonaws.com
+  TESSERA_PREFIX_NAME: phboneff-dev
+  ECR_REGISTRY: 869935063533.dkr.ecr.us-east-1.amazonaws.com
   ECR_REPOSITORY_CONFORMANCE: trillian-tessera/conformance:latest
   ECR_REPOSITORY_HAMMER: trillian-tessera/hammer:latest
   AWS_REGION: us-east-1
@@ -82,9 +82,9 @@ jobs:
           tg_version: ${{ env.TG_VERSION }}
           tg_dir: ${{ env.TG_DIR }}
           tg_command: "destroy"
-        env:
-          TESSERA_SIGNER: unused
-          TESSERA_VERIFIER: unused
+        #env:
+        #  TESSERA_SIGNER: unused
+        #  TESSERA_VERIFIER: unused
 
       ## Generate a new keys for the log to use, and export them to environment
       ## variables for Terragrunt to use.
