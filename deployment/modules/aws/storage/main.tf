@@ -15,28 +15,15 @@ resource "aws_s3_bucket" "log_bucket" {
   force_destroy = var.ephemeral
 }
 
-## Aurora MySQL RDS database
-resource "aws_rds_cluster" "log_rds" {
-  apply_immediately       = true
-  cluster_identifier      = "${local.name}-cluster"
-  engine                  = "aurora-mysql"
-  # TODO(phboneff): make sure that we want to pin this
-  engine_version          = "8.0.mysql_aurora.3.05.2"
-  database_name           = "tessera"
-  master_username         = "root"
-  # TODO(phboneff): move to either random strings / Secret Manager / IAM
-  master_password         = "password"
-  skip_final_snapshot     = true
-  backup_retention_period = 1
-}
-
-resource "aws_rds_cluster_instance" "cluster_instances" {
-  # TODO(phboneff): make some of these variables and/or
-  # tweak some of these.
-  count              = 1
-  identifier         = "${local.name}-writer-${count.index}"
-  cluster_identifier = aws_rds_cluster.log_rds.id
-  instance_class     = "db.r5.large"
-  engine             = aws_rds_cluster.log_rds.engine
-  engine_version     = aws_rds_cluster.log_rds.engine_version
+## MySQL RDS database
+resource "aws_db_instance" "log_rds" {
+  allocated_storage    = 10
+  db_name              = "tessera"
+  engine               = "mysql"
+  engine_version       = "8.0.39"
+  instance_class       = "db.t3.micro"
+  username             = "root"
+  password             = "password"
+  parameter_group_name = "default.mysql8.0"
+  skip_final_snapshot  = true
 }

@@ -4,8 +4,8 @@ output "log_bucket_id" {
 }
 
 output "log_rds_db" {
-  description = "Log RDS database endpoint"
-  value       = module.storage.log_rds_db.endpoint
+  description = "Log RDS database address"
+  value       = module.storage.log_rds_db.address
 }
 
 output "log_name" {

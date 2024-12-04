@@ -5,5 +5,5 @@ output "log_bucket" {
 
 output "log_rds_db" {
   description = "Log RDS database"
-  value       = aws_rds_cluster.log_rds
+  value       = aws_db_instance.log_rds
 }
