@@ -82,9 +82,9 @@ jobs:
           tg_version: ${{ env.TG_VERSION }}
           tg_dir: ${{ env.TG_DIR }}
           tg_command: "destroy"
-        #env:
-        #  TESSERA_SIGNER: unused
-        #  TESSERA_VERIFIER: unused
+        env:
+          TESSERA_SIGNER: unused
+          TESSERA_VERIFIER: unused
 
       ## Generate a new keys for the log to use, and export them to environment
       ## variables for Terragrunt to use.

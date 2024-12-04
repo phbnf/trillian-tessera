@@ -21,7 +21,7 @@ locals {
 
 remote_state {
   backend = "s3"
-
+integration-p
   config = {
     region         = local.region
     bucket         = "${local.prefix_name}-${local.base_name}-terraform-state"
